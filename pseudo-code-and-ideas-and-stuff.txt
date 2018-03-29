@@ -1,0 +1,54 @@
+Comms between nodes:
+1) message queues
+- master thread (aka machine) decides on newtork stucture (grid). 
+  creates nodes (as child threads) and assigns them a position (nodeID) in the grid, 
+  thus giving them info on who thier neighbours are.
+
+- upon login: logged n node notifies neighbors (who notify theirs ..." Bob is @ node 0!)
+check username table: Node handles login and username claiming for its users
+(name claiming handled like in lecture: + waiting for EVERYONE to reply + yield based on nodeID) 
+can i call someone bob? yes * NbNodes
+
+
+message:
+	UserID (name of user)
+	NodeID (position)
+	UserHops("logical time")   // incremented every time user transfers between nodes
+a user tried to log in to node 0, with username bob
+node 0 checks table -> no one called bob yet.
+node 0 sends message "can i call sb bob?" and wait for n-1 yesses
+if get request from other nod claiming bob -> decide based on NodeID
+if get all yesses -> won name bob
+if not -> prompt user for other name i.e. bob18547 or b0b
+
+A user bob moves from node0 to node1
+node0 sends a migration message to node1: 
+userId bob
+int nbSwitch
+
+Node1 gets migration message
+does:
+	table.insert(migration message.UserID, migration message.nbSwitch, 0, myId)
+
+
+rotuing info:
+userID bob
+nodeID srcNode // equivalent of "next hop" in IP routing tables
+int nbSwitch // number of times user hopped nodes  (aka logical time :D)
+int dist	// number of hops required to get to user's home node from srcNode
+
+Node 1 sends this message.
+Upon receiving, it neighbours do:
+	message inMsg
+	increment nbSwitch
+	update routing table:
+		if inMsg.nbswitch > table(inMsg.UserID).nbSwitch
+			table.insert(inMsg.UserID, inMsg.nbSwitch, inMsg.dist + 1, srcNode)
+		else if inMsg.nbswitch == table(inMsg.UserID).nbSwitch
+			if inMsg.dist + 1 < table(inMsg.UserID).dist
+				table.insert(inMsg.UserID, inMsg.nbSwitch, inMsg.dist + 1, srcNode)
+
+	forall neighbours
+		outMsg = msg( inMsg.UserID, inMsg.nbSwitch, inMsg.dist + 1, myId
+how to update?
+- call routing: look in routing table: do I know where bob is?

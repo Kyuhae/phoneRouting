@@ -1,3 +1,3 @@
 public enum MessageType {
-    LOGIN, CALL, RIP
+    LOGIN, CALL, RIP, N_RIP
 }
