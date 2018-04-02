@@ -9,13 +9,6 @@ import java.util.concurrent.TimeoutException;
 
 public class Client {
 
-    // TODO: change world coordinate (x, y) to grid coordinate
-    static int posToNodeId(int x, int y) {
-        int xPos = 0;
-        //TODO change this for actual coordinate mapping
-        return x;
-    }
-
     private static Consumer consumer;
 
     public static void main(String[] args) {
@@ -28,12 +21,20 @@ public class Client {
             xPos = Integer.parseInt(args[1]);
             yPos = Integer.parseInt(args[2]);
         } catch (NumberFormatException nfe) {
-            System.out.println("Dude, seriously, it's not that hard to pass 2 integers.");
+            System.out.println("The x and y position need to be given as integers. Call the program with <String, Integer, Integer>");
             nfe.printStackTrace();
             System.exit(1);
         }
         //setup queue from us to node
-        String queueName = posToNodeId(xPos, yPos) + "_queue";
+        String queueName = null;
+        try {
+            queueName = posToNodeId(xPos, yPos) + "_queue";
+            System.out.println("Pos: " + posToNodeId(xPos, yPos));
+        } catch (InvalidCoordinatesException e) {
+            System.out.println(e.getMessage());
+            return;
+        }
+
         String nodeHostName = "localhost";
         Channel channel;
 
@@ -42,7 +43,6 @@ public class Client {
 
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(nodeHostName);
-
 
         try {
             Connection connection = factory.newConnection();
@@ -85,6 +85,18 @@ public class Client {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    static int posToNodeId(int x, int y) throws InvalidCoordinatesException{
+        if (x < 0 || x > CommunicationConstants.WORLD_WIDTH - 1 || y < 0 || y > CommunicationConstants.WORLD_HEIGTH - 1) {
+            throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
+                    "\tx: [0, " + (CommunicationConstants.WORLD_WIDTH - 1) + "]\n" +
+                    "\ty: [0, " + (CommunicationConstants.WORLD_HEIGTH - 1) + "]");
+        }
+
+        int xPos = (x  / CommunicationConstants.HOR_STRETCH);
+        int yPos = (y / CommunicationConstants.VER_STRETCH);
+        return yPos * CommunicationConstants.GRID_WIDTH + xPos;
     }
 }
 
