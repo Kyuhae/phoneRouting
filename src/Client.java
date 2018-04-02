@@ -1,21 +1,22 @@
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
 
 public class Client {
 
+    // TODO: change world coordinate (x, y) to grid coordinate
     static int posToNodeId(int x, int y) {
+        int xPos = 0;
         //TODO change this for actual coordinate mapping
         return x;
     }
 
-
+    private static Consumer consumer;
 
     public static void main(String[] args) {
         //clientName, clientX, clientY
@@ -59,9 +60,29 @@ public class Client {
 
             Message msg = new Message(MessageType.LOGIN, args[0]);
             channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+
+            final BlockingQueue<String> response = new ArrayBlockingQueue<String>(1);
+
+            consumer = new DefaultConsumer(channel) {
+                @Override
+                public void handleDelivery (String consumerTag, Envelope envelope,
+                                            AMQP.BasicProperties props, byte[] body)
+                        throws IOException {
+                    Message msg = SerializationUtils.deserialize(body);
+                    String msgBody = msg.getBody();
+                    response.offer(msgBody);
+                }
+            };
+
+            channel.basicConsume(replyQueueName, true, consumer);
+
+            System.out.println(response.take());
+
+        } catch (TimeoutException e) {
+            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
-        } catch (TimeoutException e) {
+        } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }

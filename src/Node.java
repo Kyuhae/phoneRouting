@@ -52,9 +52,9 @@ public class Node implements  Runnable {
 
             try {
                 connection = factory.newConnection();
-                n.setChannel(connection.createChannel());
-                n.getChannel().queueDeclare(n.getQueueName(),
-                        false, false, false, null);
+                Channel channel = connection.createChannel();
+                n.setChannel(channel);
+                channel.queueDeclare(n.getQueueName(), false, false, false, null);
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (TimeoutException e) {
@@ -70,8 +70,6 @@ public class Node implements  Runnable {
         // Send <origin, nextHop, dist to this id from sender> to all neighbours
         neighbourBCast(MessageType.N_RIP, id + " " + id + " " + 0);
 
-        // TODO: make sure we have info for all neighbours
-
         // Build consumer
         consumer = new DefaultConsumer(myChannel) {
             @Override
@@ -86,7 +84,9 @@ public class Node implements  Runnable {
                 //use info from msg to do some logic and/or reply as needed
                 switch (msg.getType()) {
                     case LOGIN:
-                        System.out.println(msg.getBody());
+                        System.out.println(id + ": " + msg.getBody());
+                        Message reply = new Message(MessageType.LOGIN, "Test");
+                        myChannel.basicPublish("", replyQueueName, null, SerializationUtils.serialize(reply));
                         break;
                     case CALL:
                         break;
@@ -146,17 +146,18 @@ public class Node implements  Runnable {
         //  bcast can i haz this name ploxx?
         // for all nodes : wait for positive anwser
         //bcast
-
     }
+
+    // TODO: Implement
     private void handleCall() {
 
     }
 
+    // TODO: Implement
     private void handleRip() {
 
     }
 
-    // TODO why do the other nodes not seem to bcast?  find out next time :D
     private void handleN_Rip(int originID, int nextHop, int dist) {
         int newDist = dist + 1;
         Pair<Integer, Integer> prevEntry;
@@ -184,4 +185,3 @@ public class Node implements  Runnable {
         }
     }
 }
-
