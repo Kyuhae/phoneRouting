@@ -52,3 +52,7 @@ Upon receiving, it neighbours do:
 		outMsg = msg( inMsg.UserID, inMsg.nbSwitch, inMsg.dist + 1, myId
 how to update?
 - call routing: look in routing table: do I know where bob is?
+
+
+#### NEW IDEAS  :D ####
+cannot transfer from node to node before you have been given a name. 
