@@ -2,6 +2,9 @@ package client;
 
 import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
+import shared.CommunicationConstants;
+import shared.Message;
+import shared.MessageType;
 
 import java.io.IOException;
 import java.util.Scanner;
@@ -78,7 +81,7 @@ public class Client {
                     String msgBody = msg.getBody();
 
                     switch (msg.getType()) {
-                        case MessageType.LOGIN:
+                        case LOGIN:
                             //parse message
                             String[] parts = msgBody.split(" ");
                             if (parts.length != 1) {
@@ -89,9 +92,9 @@ public class Client {
                             //handle Login
                             handleLogin(message);
                             break;
-                        case MessageType.CALL:
+                        case CALL:
                             break;
-                        case MessageType.RIP:
+                        case RIP:
                             break;
                         default:
                             System.out.println("Who is sending useless messages here?");

@@ -5,7 +5,7 @@ Comms between nodes:
   thus giving them info on who thier neighbours are.
 
 - upon login: logged n node notifies neighbors (who notify theirs ..." Bob is @ node 0!)
-check username table: Node handles login and username claiming for its users
+check username table: server.Node handles login and username claiming for its users
 (name claiming handled like in lecture: + waiting for EVERYONE to reply + yield based on nodeID) 
 can i call someone bob? yes * NbNodes
 
@@ -37,7 +37,7 @@ nodeID srcNode // equivalent of "next hop" in IP routing tables
 int nbSwitch // number of times user hopped nodes  (aka logical time :D)
 int dist	// number of hops required to get to user's home node from srcNode
 
-Node 1 sends this message.
+server.Node 1 sends this message.
 Upon receiving, it neighbours do:
 	message inMsg
 	increment nbSwitch
