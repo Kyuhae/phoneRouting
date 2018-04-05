@@ -51,7 +51,7 @@ public class Client {
             return;
         }
 
-        String queueName = nodeNum + "_queue";
+        queueName = nodeNum + "_queue";
         String nodeHostName = "localhost";
 
         //get name and pos form cmdline
@@ -160,6 +160,3 @@ public class Client {
         return yPos * GRID_WIDTH + xPos;
     }
 }
-
-//for next time: need to implement client disconnect + all messaging logic :D
-

@@ -156,6 +156,7 @@ public class Node implements  Runnable {
                     case NAME_LOCK_ANNOUNCE:
                         //someone is confirming they got a name (good for them)
                         //add it to clients list, remove it from reserved
+                        System.out.println("node " + id + "got NAME_LOCK_ANNOUNCE for " + msg.getBody() + " from " + msg.getSrc());
                         ClientInfo_itf newClient = new ClientInfo(msg.getSrc(), msg.getBody());
                         clients.add(newClient);
                         reservedNames.remove(msg.getBody());
@@ -227,6 +228,7 @@ public class Node implements  Runnable {
     }
 
     private void handleLogin(String clientName, String replyQueueName) {
+        System.out.println("Login for client " + clientName + " requested.");
         //is the name he wants available on my node?
         boolean available = true;
         //check if I already know of an established client with this name
@@ -235,8 +237,11 @@ public class Node implements  Runnable {
                 available = false;
             }
         }
+        if (!available)
+            System.out.println("A client already has name" + clientName);
+
         //check if there is an ongoing election process for this name
-        available = reservedNames.contains(clientName);
+        available = (available && !reservedNames.contains(clientName));
 
         if (!available) {
             //already know it's pointless, ask for another name
@@ -260,17 +265,21 @@ public class Node implements  Runnable {
     }
 
     private void handleNameLockReq(int requester, String clientName) {
-        //private List<ClientInfo_itf> clients;
-        //private List<Pair<String, List<Integer>>> desiredNames;
+        boolean available = true;
         String response = "winner";
+        // check if we know a client with this name already exists
         for (ClientInfo_itf c : clients) {
             if (c.getName().equals(clientName)) {
+                System.out.println("Billy is already claimed by an existing client on node " + c.getNodeId());
                 response = "looser";
-                return;
+                available = false;
             }
         }
 
-        if (desiredNames.containsKey(clientName)) {
+        //if no clients have this name yet, and we also want this name
+        if (available && desiredNames.containsKey(clientName)) {
+            System.out.println("Hey! I (node " + id +") want that name too!");
+            //determine which of us is higher priority
             if (requester < id) {
                 response = "winner";
             } else {
@@ -282,7 +291,9 @@ public class Node implements  Runnable {
 
     private void handleNameLockReply(String clientName, String vote) {
         String response = CLIENT_LOGIN_NEG;
+        System.out.println("Node " + id + "got NAME_LOCK_REPLY for " + clientName);
         if (!desiredNames.containsKey(clientName)) {
+            System.out.println("I have no memory of requesting this name... " + clientName);
             return;
         }
 
@@ -290,19 +301,23 @@ public class Node implements  Runnable {
         ClientInfo_itf client = infoPair.getFirst();
 
         if (vote.equals("looser")) {
+            //one negative response! -> We lost!
+            System.out.println("Negative response for name " + clientName + " received");
             response = CLIENT_LOGIN_NEG;
             desiredNames.remove(clientName);
         } else {
+            System.out.println("positive response for name " + clientName + " received. num of nodes " + numOfNodes);
             infoPair.setSecond(infoPair.getSecond() + 1);
-            // We won!
-            if (infoPair.getSecond() == numOfNodes) {
-                // add client to ourselves
+            if (infoPair.getSecond() != numOfNodes-1) {
+                //we haven't received enough answers yet.
+                return;
+            } else {
+                // all positive responses! -> We won!
                 clients.add(client);
-                // remove it from desired
                 desiredNames.remove(clientName);
-                // broadcast: we got it!
+                // announce this name as ours
                 bCast(MessageType.NAME_LOCK_ANNOUNCE, clientName);
-                // positive message to client
+                // confirm login to client
                 response = CLIENT_LOGIN_POS;
             }
         }
