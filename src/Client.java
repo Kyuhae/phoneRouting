@@ -2,6 +2,7 @@ import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
 
 import java.io.IOException;
+import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -10,10 +11,15 @@ import java.util.concurrent.TimeoutException;
 public class Client {
 
     private static Consumer consumer;
+    private static String name;
+    private static Channel channel;
+    private static String queueName;
+    private static String replyQueueName;
+    private static AMQP.BasicProperties props;
 
     public static void main(String[] args) {
         //clientName, clientX, clientY
-        String name = args[0];
+        name = args[0];
         // He who passes invalid parameters deserves the crash and burn
         int xPos = 0;
         int yPos = 0;
@@ -36,8 +42,6 @@ public class Client {
         }
 
         String nodeHostName = "localhost";
-        Channel channel;
-
         //get name and pos form cmdline
         //login to node given by pos :by sending msg on queue pos+"_queue"
 
@@ -49,10 +53,10 @@ public class Client {
             channel = connection.createChannel();
 
             //prepare the name for the queue from node to us
-            String replyQueueName = channel.queueDeclare().getQueue();
+            replyQueueName = channel.queueDeclare().getQueue();
             //prepare props
             final String corrId = UUID.randomUUID().toString();
-            AMQP.BasicProperties props = new AMQP.BasicProperties
+            props = new AMQP.BasicProperties
                     .Builder()
                     .correlationId(corrId)
                     .replyTo(replyQueueName)
@@ -70,20 +74,68 @@ public class Client {
                         throws IOException {
                     Message msg = SerializationUtils.deserialize(body);
                     String msgBody = msg.getBody();
-                    response.offer(msgBody);
+
+                    switch (msg.getType()) {
+                        case LOGIN:
+                            //parse message
+                            String[] parts = msgBody.split(" ");
+                            if (parts.length != 1) {
+                                System.out.println("Invalid login message received. Wrong number of parameters.");
+                                return;
+                            }
+                            String message = parts[0];
+                            //handle Login
+                            handleLogin(message);
+                            break;
+                        case CALL:
+                            break;
+                        case RIP:
+                            break;
+                        default:
+                            System.out.println("Who is sending useless messages here?");
+                    }
                 }
             };
 
             channel.basicConsume(replyQueueName, true, consumer);
 
-            System.out.println(response.take());
-
-        } catch (TimeoutException e) {
-            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
-        } catch (InterruptedException e) {
+        } catch (TimeoutException e) {
             e.printStackTrace();
+        }
+
+
+    }
+
+    private static void handleLogin(String message) {
+        switch(message) {
+            case "success":
+                System.out.println("Successfully logged in!");
+                break;
+
+            case "nameInUse":
+                //get new name from user input
+                System.out.println("Login failed: this name is already in use. Enter another name.");
+                Scanner scan = new Scanner(System.in);
+                String s = scan.next();
+                while (s.equals(name)) {
+                    System.out.println("No, I said ANOTHER name.");
+                    s = scan.next();
+                }
+                name = s;
+                System.out.println("Name entered, retrying login");
+                try {
+                    Message msg = new Message(MessageType.LOGIN, name);
+                    channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                break;
+
+            default:
+                System.out.println("unrecognized LOGIN message type");
+
         }
     }
 
@@ -101,3 +153,4 @@ public class Client {
 }
 
 //for next time: need to implement client disconnect + all messaging logic :D
+

@@ -8,7 +8,7 @@ public class Instantiator {
     public static void main (String [] args) {
         for (int row = 0; row < CommunicationConstants.GRID_HEIGTH; row++) {
             for (int col = 0; col < CommunicationConstants.GRID_WIDTH; col++) {
-                List<NeighbourInfo> neighours = new ArrayList<>();
+                List<NeighbourInfo_itf> neighours = new ArrayList<>();
                 int left = col <= 0 ? -1 : row * CommunicationConstants.GRID_WIDTH + (col - 1);
                 int right = col >= CommunicationConstants.GRID_WIDTH - 1 ? -1 : row * CommunicationConstants.GRID_WIDTH + (col + 1);
                 int top = row <= 0 ? -1 : (row - 1) * CommunicationConstants.GRID_WIDTH + col;
