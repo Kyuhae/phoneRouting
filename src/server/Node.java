@@ -104,7 +104,6 @@ public class Node implements  Runnable {
                 String[] parts = msgBody.split(" ");
 
                 //global switch variables
-                int originId;
 
                 //use info from msg to do some logic and/or reply as needed
                 switch (msg.getType()) {
@@ -114,11 +113,9 @@ public class Node implements  Runnable {
                             System.out.println("Invalid network broadcast received. Wrong number of parameters.");
                             return;
                         }
-                        originId = 0;
                         int nextHop = 0;
                         int dist = 0;
                         try {
-                            originId = Integer.parseInt(parts[0]);
                             nextHop = Integer.parseInt(parts[1]);
                             dist = Integer.parseInt(parts[2]);
                         } catch (NumberFormatException nfe) {
@@ -128,7 +125,7 @@ public class Node implements  Runnable {
                         }
 
                         //handle message
-                        handleN_Rip(originId, nextHop, dist);
+                        handleN_Rip(msg.getSrc(), nextHop, dist);
                         break;
 
                     case LOGIN:
@@ -153,7 +150,6 @@ public class Node implements  Runnable {
                             System.out.println("Invalid NAME_LOCK_REPLY message received. Wrong number of parameters.");
                             return;
                         }
-                        originId = Integer.parseInt(parts[0]);
                         int dest = Integer.parseInt(parts[1]);
                         int response = Integer.parseInt(parts[2]); // 0 or 1
 
@@ -163,7 +159,6 @@ public class Node implements  Runnable {
                         ///if i won
                         //clients.add(new server.ClientInfo(clientName, replyQueueName));
                         // + send NAME_LOCK_CONFIRM
-
                         break;
 
                     case NAME_LOCK_CONFIRM:
@@ -196,9 +191,34 @@ public class Node implements  Runnable {
 
     private void neighbourBCast(MessageType type, String msg) {
         for (NeighbourInfo_itf n : this.neighbours) {
-            Message bc = new Message(type, msg);
+            Message bc = new Message(id, n.getNodeId(), type, msg);
             try {
                 n.getChannel().basicPublish("", n.getQueueName(), null, SerializationUtils.serialize(bc));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void bCast(MessageType type, String msgBody) {
+        for (int destId = 0; destId < nodeRouting.size(); destId++) {
+            Pair<Integer,Integer> p = nodeRouting.get(destId);
+            NeighbourInfo_itf nextHop = null;
+            for (NeighbourInfo_itf n : neighbours) {
+                if (n.getNodeId() == p.getFirst()) {
+                    nextHop = n;
+                }
+            }
+
+            // Someone doesn't exist who should exist
+            if (nextHop == null) {
+                System.out.println("No next hop was found for NodeId " + destId + ". Fix your setup function.");
+                continue;
+            }
+
+            try {
+                Message msg = new Message(id, destId, type, msgBody);
+                nextHop.getChannel().basicPublish("", nextHop.getQueueName(), null, SerializationUtils.serialize(msg));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -220,7 +240,7 @@ public class Node implements  Runnable {
         if (!available) {
             //already know it's pointless, ask for another name
             try {
-                Message msg = new Message(MessageType.LOGIN, "nameInUse");
+                Message msg = new Message(id, -1, MessageType.LOGIN, "nameInUse");
                 myChannel.basicPublish("", replyQueueName, null, SerializationUtils.serialize(msg));
             } catch (IOException e) {
                 e.printStackTrace();
@@ -232,17 +252,7 @@ public class Node implements  Runnable {
             //try to acquire lock on that name
             // Map of ID - (nextStep, dist) for sending and stuff
             //private ConcurrentMap<Integer, server.util.Pair<Integer, Integer>> nodeRouting;
-            for (int destId = 0; destId < nodeRouting.size(); destId++) {
-                Pair<Integer,Integer> p = nodeRouting.get(destId);
-                try {
-                    Message msg = new Message(MessageType.NAME_LOCK_REQ, id + " " + destId + " " + clientName);
-                    myChannel.basicPublish("", replyQueueName, null, SerializationUtils.serialize(msg));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-
-            }
+            bCast(MessageType.NAME_LOCK_REQ, clientName);
         }
         //is it available globally?
         //  bcast can i haz this name ploxx?

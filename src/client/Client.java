@@ -21,6 +21,7 @@ public class Client {
     private static String queueName;
     private static String replyQueueName;
     private static AMQP.BasicProperties props;
+    private static int nodeNum;
 
     public static void main(String[] args) {
         //clientName, clientX, clientY
@@ -37,19 +38,19 @@ public class Client {
             System.exit(1);
         }
         //setup queue from us to node
-        String queueName = null;
         try {
-            queueName = posToNodeId(xPos, yPos) + "_queue";
+            nodeNum = posToNodeId(xPos, yPos);
             System.out.println("Pos: " + posToNodeId(xPos, yPos));
         } catch (InvalidCoordinatesException e) {
             System.out.println(e.getMessage());
             return;
         }
 
+        String queueName = nodeNum + "_queue";
         String nodeHostName = "localhost";
+
         //get name and pos form cmdline
         //login to node given by pos :by sending msg on queue pos+"_queue"
-
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(nodeHostName);
 
@@ -67,7 +68,7 @@ public class Client {
                     .replyTo(replyQueueName)
                     .build();
 
-            Message msg = new Message(MessageType.LOGIN, args[0]);
+            Message msg = new Message(-1, nodeNum, MessageType.LOGIN, args[0]);
             channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
 
             final BlockingQueue<String> response = new ArrayBlockingQueue<String>(1);
@@ -131,7 +132,7 @@ public class Client {
                 name = s;
                 System.out.println("Name entered, retrying login");
                 try {
-                    Message msg = new Message(MessageType.LOGIN, name);
+                    Message msg = new Message(-1, nodeNum, MessageType.LOGIN, name);
                     channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
                 } catch (IOException e) {
                     e.printStackTrace();
