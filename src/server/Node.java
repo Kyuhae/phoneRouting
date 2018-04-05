@@ -166,7 +166,7 @@ public class Node implements  Runnable {
 
                         break;
 
-                    case NAME_LOCK_CONFRIM:
+                    case NAME_LOCK_CONFIRM:
                         //someone is confirming they got a name (good for them)
                         //add it to clients list, remove it from reserved
 
