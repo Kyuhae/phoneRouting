@@ -1,3 +1,5 @@
+package server.util;
+
 public class Pair<A, B> {
     private A first;
     private B second;

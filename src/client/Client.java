@@ -1,3 +1,5 @@
+package client;
+
 import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
 
@@ -76,7 +78,7 @@ public class Client {
                     String msgBody = msg.getBody();
 
                     switch (msg.getType()) {
-                        case LOGIN:
+                        case MessageType.LOGIN:
                             //parse message
                             String[] parts = msgBody.split(" ");
                             if (parts.length != 1) {
@@ -87,9 +89,9 @@ public class Client {
                             //handle Login
                             handleLogin(message);
                             break;
-                        case CALL:
+                        case MessageType.CALL:
                             break;
-                        case RIP:
+                        case MessageType.RIP:
                             break;
                         default:
                             System.out.println("Who is sending useless messages here?");
@@ -139,7 +141,7 @@ public class Client {
         }
     }
 
-    static int posToNodeId(int x, int y) throws InvalidCoordinatesException{
+    static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
         if (x < 0 || x > CommunicationConstants.WORLD_WIDTH - 1 || y < 0 || y > CommunicationConstants.WORLD_HEIGTH - 1) {
             throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
                     "\tx: [0, " + (CommunicationConstants.WORLD_WIDTH - 1) + "]\n" +

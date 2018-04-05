@@ -1,5 +1,10 @@
+package server;
+
 import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
+import server.util.Pair;
+import shared.Message;
+import shared.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -74,7 +79,7 @@ public class Node implements  Runnable {
 
 
         nodeRouting.put(id, new Pair<>(id, 0));
-        //Node only knows its local neighbours now.
+        //server.Node only knows its local neighbours now.
         //advertise routing info
         // Send <origin, nextHop, dist to this id from sender> to all neighbours
         neighbourBCast(MessageType.N_RIP, id + " " + id + " " + 0);
@@ -156,7 +161,7 @@ public class Node implements  Runnable {
 
                         //if got all replys: check if i won
                         ///if i won
-                        //clients.add(new ClientInfo(clientName, replyQueueName));
+                        //clients.add(new server.ClientInfo(clientName, replyQueueName));
                         // + send NAME_LOCK_CONFIRM
 
                         break;
@@ -226,7 +231,7 @@ public class Node implements  Runnable {
             desiredNames.add(new Pair<>(clientName, new ArrayList<>()));
             //try to acquire lock on that name
             // Map of ID - (nextStep, dist) for sending and stuff
-            //private ConcurrentMap<Integer, Pair<Integer, Integer>> nodeRouting;
+            //private ConcurrentMap<Integer, server.util.Pair<Integer, Integer>> nodeRouting;
             for (int destId = 0; destId < nodeRouting.size(); destId++) {
                 Pair<Integer,Integer> p = nodeRouting.get(destId);
                 try {
@@ -261,7 +266,7 @@ public class Node implements  Runnable {
         if (prevEntry == null) {
             neighbourBCast(MessageType.N_RIP,originID + " " + id + " " + newDist);
             if (id == 1)
-                System.out.println("Update1! Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
+                System.out.println("Update1! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
             return;
         } else {
             if (prevEntry.getSecond() > newDist) {
@@ -270,7 +275,7 @@ public class Node implements  Runnable {
                     if (prevEntry.getSecond() > newDist) {
                         prevEntry.setSecond(newDist);
                         prevEntry.setFirst(nextHop);
-                        System.out.println("Update2! Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
+                        System.out.println("Update2! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
                     }
                 }
 

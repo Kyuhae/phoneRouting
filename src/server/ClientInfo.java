@@ -1,4 +1,4 @@
-import com.rabbitmq.client.*;
+package server;
 
 public class ClientInfo implements ClientInfo_itf {
     private int nodeId;

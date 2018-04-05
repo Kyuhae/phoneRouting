@@ -1,3 +1,5 @@
+package server;
+
 import com.rabbitmq.client.Channel;
 
 public interface NeighbourInfo_itf {

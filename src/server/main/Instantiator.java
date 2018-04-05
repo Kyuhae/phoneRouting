@@ -1,3 +1,10 @@
+package server.main;
+
+import server.NeighbourInfo;
+import server.NeighbourInfo_itf;
+import server.Node;
+import shared.CommunicationConstants;
+
 import java.util.ArrayList;
 import java.util.List;
 
