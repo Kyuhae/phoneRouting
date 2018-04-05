@@ -2,7 +2,7 @@ package client;
 
 import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
-import shared.CommunicationConstants;
+import static shared.CommunicationConstants.*;
 import shared.Message;
 import shared.MessageType;
 
@@ -24,6 +24,11 @@ public class Client {
     private static int nodeNum;
 
     public static void main(String[] args) {
+        if (args.length != 3) {
+            System.out.println("Usage: <Name : String> <xPos : int> <yPos : int>");
+            return;
+        }
+
         //clientName, clientX, clientY
         name = args[0];
         // He who passes invalid parameters deserves the crash and burn
@@ -95,8 +100,6 @@ public class Client {
                             break;
                         case CALL:
                             break;
-                        case RIP:
-                            break;
                         default:
                             System.out.println("Who is sending useless messages here?");
                     }
@@ -116,11 +119,11 @@ public class Client {
 
     private static void handleLogin(String message) {
         switch(message) {
-            case "success":
+            case CLIENT_LOGIN_POS:
                 System.out.println("Successfully logged in!");
                 break;
 
-            case "nameInUse":
+            case CLIENT_LOGIN_NEG:
                 //get new name from user input
                 System.out.println("Login failed: this name is already in use. Enter another name.");
                 Scanner scan = new Scanner(System.in);
@@ -146,15 +149,15 @@ public class Client {
     }
 
     static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
-        if (x < 0 || x > CommunicationConstants.WORLD_WIDTH - 1 || y < 0 || y > CommunicationConstants.WORLD_HEIGTH - 1) {
+        if (x < 0 || x > WORLD_WIDTH - 1 || y < 0 || y > WORLD_HEIGTH - 1) {
             throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
-                    "\tx: [0, " + (CommunicationConstants.WORLD_WIDTH - 1) + "]\n" +
-                    "\ty: [0, " + (CommunicationConstants.WORLD_HEIGTH - 1) + "]");
+                    "\tx: [0, " + (WORLD_WIDTH - 1) + "]\n" +
+                    "\ty: [0, " + (WORLD_HEIGTH - 1) + "]");
         }
 
-        int xPos = (x  / CommunicationConstants.HOR_STRETCH);
-        int yPos = (y / CommunicationConstants.VER_STRETCH);
-        return yPos * CommunicationConstants.GRID_WIDTH + xPos;
+        int xPos = (x  / HOR_STRETCH);
+        int yPos = (y / VER_STRETCH);
+        return yPos * GRID_WIDTH + xPos;
     }
 }
 

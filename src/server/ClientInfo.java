@@ -6,9 +6,9 @@ public class ClientInfo implements ClientInfo_itf {
     private String queueName;
 
 
-    public ClientInfo(String name, String queueName) {
+    public ClientInfo(int nodeId, String name) {
+        this.nodeId = nodeId;
         this.name = name;
-        this.queueName = queueName;
     }
 
     public int getNodeId() {
@@ -23,7 +23,12 @@ public class ClientInfo implements ClientInfo_itf {
         return this.name;
     }
 
+    public void setQueueName(String queueName) {
+        this.queueName = queueName;
+    }
+
     public String getQueueName() {
+        // TODO: set sensible default if not set/ Exception?
         return queueName;
     }
 }

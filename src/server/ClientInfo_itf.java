@@ -5,4 +5,5 @@ public interface ClientInfo_itf {
     void setNodeId(int nodeId);
     String getName();
     String getQueueName();
+    void setQueueName(String queueName);
 }

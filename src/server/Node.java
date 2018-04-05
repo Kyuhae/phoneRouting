@@ -3,13 +3,12 @@ package server;
 import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
 import server.util.Pair;
+import static shared.CommunicationConstants.*;
 import shared.Message;
 import shared.MessageType;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
@@ -17,21 +16,23 @@ import java.util.concurrent.TimeoutException;
 
 public class Node implements  Runnable {
 
-    private int id;
+    private final int id;
+    private final int numOfNodes;
     private Channel myChannel;
     private Consumer consumer;
-    private String inQueue;
+    private final String inQueue;
 
     private List<NeighbourInfo_itf> neighbours;
     private List<ClientInfo_itf> clients;
-    private List<Pair<String, List<Integer>>> desiredNames;
+    private Map<String, Pair<ClientInfo_itf, Integer>> desiredNames;
     private Set<String> reservedNames;
 
     // Map of ID - (nextStep, dist) for sending and stuff
     private ConcurrentMap<Integer, Pair<Integer, Integer>> nodeRouting;
 
-    public Node(int id, List<NeighbourInfo_itf> neighbours) {
+    public Node(int id, int numOfNodes, List<NeighbourInfo_itf> neighbours) {
         this.id = id;
+        this.numOfNodes = numOfNodes;
         this.neighbours = neighbours;
         nodeRouting = new ConcurrentHashMap<>();
 
@@ -41,14 +42,16 @@ public class Node implements  Runnable {
         factory.setHost("localhost");
 
         Connection connection = null;
+
         try {
             connection = factory.newConnection();
             myChannel = connection.createChannel();
             myChannel.queueDeclare(inQueue, false, false, false, null);
-        } catch (IOException e) {
+        } catch (IOException | TimeoutException e) {
+            System.out.println("Node setup failed due to network reasons. We are not prepared for this. Burn.");
             e.printStackTrace();
-        } catch (TimeoutException e) {
-            e.printStackTrace();
+            // Isn't it convenient that everything is running in the same thread? Yep. It is. :D
+            System.exit(1);
         }
 
         //System.out.println("I'm node " + id);
@@ -79,12 +82,12 @@ public class Node implements  Runnable {
         //server.Node only knows its local neighbours now.
         //advertise routing info
         // Send <origin, nextHop, dist to this id from sender> to all neighbours
-        neighbourBCast(MessageType.N_RIP, id + " " + id + " " + 0);
+        neighbourBCast(MessageType.N_RIP, id + " " + 0);
 
 
         //Initialize list of clients
         clients = new ArrayList<>();
-        desiredNames = new ArrayList<>();
+        desiredNames = new HashMap<>();
         ConcurrentMap<String, String> m = new ConcurrentHashMap<>();
         reservedNames = m.keySet();
 
@@ -106,38 +109,35 @@ public class Node implements  Runnable {
                     return;
                 }
 
-                //use info from msg to do some logic and/or reply as needed
                 switch (msg.getType()) {
                     case N_RIP:
-                        //parse message
                         if (parts.length != 2) {
                             System.out.println("Invalid network broadcast received. Wrong number of parameters.");
                             return;
                         }
-                        int nextHop = 0;
-                        int dist = 0;
+
                         try {
-                            nextHop = Integer.parseInt(parts[1]);
-                            dist = Integer.parseInt(parts[2]);
+                            int originId = Integer.parseInt(parts[0]);
+                            int dist = Integer.parseInt(parts[1]);
+                            handleN_Rip(originId, msg.getSrc(), dist);
+
                         } catch (NumberFormatException nfe) {
                             System.out.println("Invalid network broadcast received. Id or dist not an Integer.");
                             nfe.printStackTrace();
-                            return;
                         }
-
-                        //handle message
-                        handleN_Rip(msg.getSrc(), nextHop, dist);
                         break;
 
                     case LOGIN:
-                        //parse message
+                        // block logins until nodeRouting.size() == numOfNodes
+                        if (nodeRouting.size() != numOfNodes) {
+                            return;
+                        }
                         if (parts.length != 1) {
                             System.out.println("Invalid login message received. Wrong number of parameters.");
                             return;
                         }
-                        String clientName = parts[0];
-                        //handle Login
-                        handleLogin(clientName, replyQueueName);
+
+                        handleLogin(parts[0], replyQueueName);
                         break;
 
                     case NAME_LOCK_REQ:
@@ -146,30 +146,22 @@ public class Node implements  Runnable {
 
                     case NAME_LOCK_REPLY:
                         //parse message
-                        if (parts.length != 1) {
+                        if (parts.length != 2) {
                             System.out.println("Invalid NAME_LOCK_REPLY message received. Wrong number of parameters.");
                             return;
                         }
-                        int response = Integer.parseInt(parts[0]); // 0 or 1
-
-                        //handleNameLockReply(origiId, dest, response);
-
-                        //if got all replys: check if i won
-                        ///if i won
-                        //clients.add(new server.ClientInfo(clientName, replyQueueName));
-                        // + send NAME_LOCK_CONFIRM
+                        handleNameLockReply(parts[0], parts[1]);
                         break;
 
-                    case NAME_LOCK_CONFIRM:
+                    case NAME_LOCK_ANNOUNCE:
                         //someone is confirming they got a name (good for them)
                         //add it to clients list, remove it from reserved
-
+                        ClientInfo_itf newClient = new ClientInfo(msg.getSrc(), msg.getBody());
+                        clients.add(newClient);
+                        reservedNames.remove(msg.getBody());
                         break;
-
 
                     case CALL:
-                        break;
-                    case RIP:
                         break;
 
                     default:
@@ -257,47 +249,77 @@ public class Node implements  Runnable {
         }
         else {
             //add name to desired list, and initialize nbResponse counter
-            desiredNames.add(new Pair<>(clientName, new ArrayList<>()));
+            ClientInfo_itf clientInfo = new ClientInfo(id, clientName);
+            clientInfo.setQueueName(replyQueueName);
+            Pair<ClientInfo_itf, Integer> newClient = new Pair<>(clientInfo, 0);
+
+            desiredNames.put(clientName, newClient);
             //try to acquire lock on that name
             bCast(MessageType.NAME_LOCK_REQ, clientName);
         }
-        //is it available globally?
-        //  bcast can i haz this name ploxx?
-        // for all nodes : wait for positive anwser
-        //bcast
     }
 
-    private void handleNameLockReq(int requester, String name) {
+    private void handleNameLockReq(int requester, String clientName) {
         //private List<ClientInfo_itf> clients;
         //private List<Pair<String, List<Integer>>> desiredNames;
         String response = "winner";
         for (ClientInfo_itf c : clients) {
-            if (c.getName().equals(name)) {
+            if (c.getName().equals(clientName)) {
                 response = "looser";
                 return;
             }
         }
 
-        for (Pair<String, List<Integer>> p : desiredNames) {
-            if (p.getFirst().equals(name)) {
-                if (requester < id) {
-                    response = "winner";
-                } else {
-                    response = "looser";
-                }
-                return;
+        if (desiredNames.containsKey(clientName)) {
+            if (requester < id) {
+                response = "winner";
+            } else {
+                response = "looser";
             }
         }
-        sendMsgToNode(id, requester, MessageType.NAME_LOCK_REPLY, response);
+        sendMsgToNode(id, requester, MessageType.NAME_LOCK_REPLY, clientName + " " + response);
+    }
+
+    private void handleNameLockReply(String clientName, String vote) {
+        String response = CLIENT_LOGIN_NEG;
+        if (!desiredNames.containsKey(clientName)) {
+            return;
+        }
+
+        Pair<ClientInfo_itf, Integer> infoPair = desiredNames.get(clientName);
+        ClientInfo_itf client = infoPair.getFirst();
+
+        if (vote.equals("looser")) {
+            response = CLIENT_LOGIN_NEG;
+            desiredNames.remove(clientName);
+        } else {
+            infoPair.setSecond(infoPair.getSecond() + 1);
+            // We won!
+            if (infoPair.getSecond() == numOfNodes) {
+                // add client to ourselves
+                clients.add(client);
+                // remove it from desired
+                desiredNames.remove(clientName);
+                // broadcast: we got it!
+                bCast(MessageType.NAME_LOCK_ANNOUNCE, clientName);
+                // positive message to client
+                response = CLIENT_LOGIN_POS;
+            }
+        }
+        try {
+            Message responseMsg = new Message(id, -1, MessageType.LOGIN, response);
+            myChannel.basicPublish("", client.getQueueName(), null,
+                    SerializationUtils.serialize(responseMsg));
+        } catch (IOException e) {
+            // TODO: tell others that client did not login after all? (relatively unimportant robustness-thingy)
+            System.out.println("Unable to confirm name winning to client");
+            e.printStackTrace();
+        }
     }
 
     private void handleCall() {
-
-    }
-
-    // TODO: Implement
-    private void handleRip() {
-
+        // client is still here: print to him
+        // client moved between sending and receiving: resend (not caught by pass through!)
     }
 
     private void handleN_Rip(int originID, int nextHop, int dist) {
@@ -305,9 +327,11 @@ public class Node implements  Runnable {
         Pair<Integer, Integer> prevEntry;
         prevEntry = nodeRouting.putIfAbsent(originID, new Pair<>(nextHop, newDist));
         if (prevEntry == null) {
-            neighbourBCast(MessageType.N_RIP,originID + " " + id + " " + newDist);
+            neighbourBCast(MessageType.N_RIP,originID + " " + newDist);
+
             if (id == 1)
                 System.out.println("Update1! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
+
             return;
         } else {
             if (prevEntry.getSecond() > newDist) {
@@ -316,13 +340,14 @@ public class Node implements  Runnable {
                     if (prevEntry.getSecond() > newDist) {
                         prevEntry.setSecond(newDist);
                         prevEntry.setFirst(nextHop);
-                        System.out.println("Update2! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
+                        if (id == 1)
+                            System.out.println("Update2! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
                     }
                 }
 
                 // tell all neighbours about this great new thing!
                 // Send <sender, id this is about, dist to this id from sender> to all neighbours
-                neighbourBCast(MessageType.N_RIP,originID + " " + id + " " + newDist);
+                neighbourBCast(MessageType.N_RIP,originID + " " + newDist);
             }
         }
     }

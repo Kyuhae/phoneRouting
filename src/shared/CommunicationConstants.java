@@ -8,6 +8,8 @@ public class CommunicationConstants {
 
     public static final int GRID_HEIGTH = 3;
 
+    public static final int NUM_OF_NODES = GRID_WIDTH * GRID_HEIGTH;
+
     public static final int HOR_STRETCH = 100;
 
     public static final int VER_STRETCH = 100;
@@ -15,4 +17,8 @@ public class CommunicationConstants {
     public static final int WORLD_WIDTH = HOR_STRETCH * GRID_WIDTH;
 
     public static final int WORLD_HEIGTH = VER_STRETCH * GRID_HEIGTH;
+
+    public static final String CLIENT_LOGIN_POS = "success";
+
+    public static final String CLIENT_LOGIN_NEG = "nameInUse";
 }
