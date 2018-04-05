@@ -1,3 +1,5 @@
+package server;
+
 import com.rabbitmq.client.*;
 
 public class NeighbourInfo implements NeighbourInfo_itf {

@@ -1,3 +1,5 @@
+package client;
+
 import com.rabbitmq.client.*;
 import org.apache.commons.lang3.SerializationUtils;
 
@@ -27,19 +29,26 @@ public class Client {
             xPos = Integer.parseInt(args[1]);
             yPos = Integer.parseInt(args[2]);
         } catch (NumberFormatException nfe) {
-            System.out.println("Dude, seriously, it's not that hard to pass 2 integers.");
+            System.out.println("The x and y position need to be given as integers. Call the program with <String, Integer, Integer>");
             nfe.printStackTrace();
             System.exit(1);
         }
         //setup queue from us to node
-        queueName = posToNodeId(xPos, yPos) + "_queue";
+        String queueName = null;
+        try {
+            queueName = posToNodeId(xPos, yPos) + "_queue";
+            System.out.println("Pos: " + posToNodeId(xPos, yPos));
+        } catch (InvalidCoordinatesException e) {
+            System.out.println(e.getMessage());
+            return;
+        }
+
         String nodeHostName = "localhost";
         //get name and pos form cmdline
         //login to node given by pos :by sending msg on queue pos+"_queue"
 
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(nodeHostName);
-
 
         try {
             Connection connection = factory.newConnection();
@@ -68,9 +77,8 @@ public class Client {
                     Message msg = SerializationUtils.deserialize(body);
                     String msgBody = msg.getBody();
 
-
                     switch (msg.getType()) {
-                        case LOGIN:
+                        case MessageType.LOGIN:
                             //parse message
                             String[] parts = msgBody.split(" ");
                             if (parts.length != 1) {
@@ -81,20 +89,17 @@ public class Client {
                             //handle Login
                             handleLogin(message);
                             break;
-                        case CALL:
+                        case MessageType.CALL:
                             break;
-                        case RIP:
+                        case MessageType.RIP:
                             break;
                         default:
                             System.out.println("Who is sending useless messages here?");
                     }
-
                 }
             };
 
             channel.basicConsume(replyQueueName, true, consumer);
-
-
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -136,9 +141,16 @@ public class Client {
         }
     }
 
-    static int posToNodeId(int x, int y) {
-        //TODO change this for actual coordinate mapping
-        return x;
+    static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
+        if (x < 0 || x > CommunicationConstants.WORLD_WIDTH - 1 || y < 0 || y > CommunicationConstants.WORLD_HEIGTH - 1) {
+            throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
+                    "\tx: [0, " + (CommunicationConstants.WORLD_WIDTH - 1) + "]\n" +
+                    "\ty: [0, " + (CommunicationConstants.WORLD_HEIGTH - 1) + "]");
+        }
+
+        int xPos = (x  / CommunicationConstants.HOR_STRETCH);
+        int yPos = (y / CommunicationConstants.VER_STRETCH);
+        return yPos * CommunicationConstants.GRID_WIDTH + xPos;
     }
 }
 
