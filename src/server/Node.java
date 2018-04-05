@@ -103,7 +103,11 @@ public class Node implements  Runnable {
                 String msgBody = msg.getBody();
                 String[] parts = msgBody.split(" ");
 
-                //global switch variables
+                // Pass through. Nothing to see her for this guy.
+                if (msg.getDest() != id) {
+                    sendMsgToNode(msg);
+                    return;
+                }
 
                 //use info from msg to do some logic and/or reply as needed
                 switch (msg.getType()) {
@@ -200,28 +204,35 @@ public class Node implements  Runnable {
         }
     }
 
+    private void sendMsgToNode(int src, int dest, MessageType type, String msgBody) {
+        Pair<Integer,Integer> p = nodeRouting.get(dest);
+        NeighbourInfo_itf nextHop = null;
+        for (NeighbourInfo_itf n : neighbours) {
+            if (n.getNodeId() == p.getFirst()) {
+                nextHop = n;
+            }
+        }
+        // Someone doesn't exist who should exist
+        if (nextHop == null) {
+            System.out.println("No next hop was found for NodeId " + dest + ". Fix your setup function.");
+            return;
+        }
+
+        try {
+            Message msg = new Message(src, dest, type, msgBody);
+            nextHop.getChannel().basicPublish("", nextHop.getQueueName(), null, SerializationUtils.serialize(msg));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendMsgToNode(Message msg) {
+        sendMsgToNode(msg.getSrc(), msg.getDest(), msg.getType(), msg.getBody());
+    }
+
     private void bCast(MessageType type, String msgBody) {
         for (int destId = 0; destId < nodeRouting.size(); destId++) {
-            Pair<Integer,Integer> p = nodeRouting.get(destId);
-            NeighbourInfo_itf nextHop = null;
-            for (NeighbourInfo_itf n : neighbours) {
-                if (n.getNodeId() == p.getFirst()) {
-                    nextHop = n;
-                }
-            }
-
-            // Someone doesn't exist who should exist
-            if (nextHop == null) {
-                System.out.println("No next hop was found for NodeId " + destId + ". Fix your setup function.");
-                continue;
-            }
-
-            try {
-                Message msg = new Message(id, destId, type, msgBody);
-                nextHop.getChannel().basicPublish("", nextHop.getQueueName(), null, SerializationUtils.serialize(msg));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            sendMsgToNode(id, destId, type, msgBody);
         }
     }
 
