@@ -27,9 +27,6 @@ public class Node implements  Runnable {
     private List<Pair<String, List<Integer>>> desiredNames;
     private Set<String> reservedNames;
 
-
-
-
     // Map of ID - (nextStep, dist) for sending and stuff
     private ConcurrentMap<Integer, Pair<Integer, Integer>> nodeRouting;
 
@@ -113,7 +110,7 @@ public class Node implements  Runnable {
                 switch (msg.getType()) {
                     case N_RIP:
                         //parse message
-                        if (parts.length != 3) {
+                        if (parts.length != 2) {
                             System.out.println("Invalid network broadcast received. Wrong number of parameters.");
                             return;
                         }
@@ -144,18 +141,16 @@ public class Node implements  Runnable {
                         break;
 
                     case NAME_LOCK_REQ:
-                        //check if we can give the guy the name
-
+                        handleNameLockReq(msg.getSrc(), msg.getBody());
                         break;
 
                     case NAME_LOCK_REPLY:
                         //parse message
-                        if (parts.length != 3) {
+                        if (parts.length != 1) {
                             System.out.println("Invalid NAME_LOCK_REPLY message received. Wrong number of parameters.");
                             return;
                         }
-                        int dest = Integer.parseInt(parts[1]);
-                        int response = Integer.parseInt(parts[2]); // 0 or 1
+                        int response = Integer.parseInt(parts[0]); // 0 or 1
 
                         //handleNameLockReply(origiId, dest, response);
 
@@ -232,7 +227,10 @@ public class Node implements  Runnable {
 
     private void bCast(MessageType type, String msgBody) {
         for (int destId = 0; destId < nodeRouting.size(); destId++) {
-            sendMsgToNode(id, destId, type, msgBody);
+            // Avoid trouble with elections
+            if (destId != id) {
+                sendMsgToNode(id, destId, type, msgBody);
+            }
         }
     }
 
@@ -261,14 +259,36 @@ public class Node implements  Runnable {
             //add name to desired list, and initialize nbResponse counter
             desiredNames.add(new Pair<>(clientName, new ArrayList<>()));
             //try to acquire lock on that name
-            // Map of ID - (nextStep, dist) for sending and stuff
-            //private ConcurrentMap<Integer, server.util.Pair<Integer, Integer>> nodeRouting;
             bCast(MessageType.NAME_LOCK_REQ, clientName);
         }
         //is it available globally?
         //  bcast can i haz this name ploxx?
         // for all nodes : wait for positive anwser
         //bcast
+    }
+
+    private void handleNameLockReq(int requester, String name) {
+        //private List<ClientInfo_itf> clients;
+        //private List<Pair<String, List<Integer>>> desiredNames;
+        String response = "winner";
+        for (ClientInfo_itf c : clients) {
+            if (c.getName().equals(name)) {
+                response = "looser";
+                return;
+            }
+        }
+
+        for (Pair<String, List<Integer>> p : desiredNames) {
+            if (p.getFirst().equals(name)) {
+                if (requester < id) {
+                    response = "winner";
+                } else {
+                    response = "looser";
+                }
+                return;
+            }
+        }
+        sendMsgToNode(id, requester, MessageType.NAME_LOCK_REPLY, response);
     }
 
     private void handleCall() {
