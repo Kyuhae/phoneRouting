@@ -212,11 +212,12 @@ public class Node implements  Runnable {
                             return;
                         }
                         int transferNodeId = Integer.parseInt(parts[1]);
-                        handleTransfer(msg.getBody(), transferNodeId);
+                        handleTransfer(parts[0], transferNodeId);
 
                     case CLIENT_ARRIVAL:
                         //a client has been transfered to me, and sent me a message. I can deduce its replyqueue
-                        ClientInfo_itf tempC = clients.get(msg.getBody());
+                        System.out.println("node " + id + " got ARRIVAL notification from client " + msg.getBody());
+                        ClientInfo_itf tempC = clients.get(parts[0]);
                         tempC.setQueueName(replyQueueName);
                         clients.remove(msg.getBody());
                         break;
@@ -479,6 +480,7 @@ public class Node implements  Runnable {
     }
 
     private void handleClientTransferReq(String clientName, int newNodeId) {
+        System.out.println(id + " doing HandleCLientTransferReq for client " + clientName + " newNodeId " + newNodeId);
         //check we have this client
         if (!clients.containsKey(clientName)) {
             System.out.println("Got ClientTransfer request from unknown client " + clientName);
@@ -492,11 +494,12 @@ public class Node implements  Runnable {
         tempC.setNodeId(newNodeId);
         tempC.setQueueName(null); //TODO adjust depending on what we decide for default QueueName
 
-        //tell newNode about the transfer
-        sendMsgToNode(id, newNodeId, MessageType.TRANSFER, clientName);
+        //tell everyone about the transfer
+        bCast(MessageType.TRANSFER, clientName + " " + newNodeId);
     }
 
     private void handleTransfer(String clientName, int newNodeId) {
+        System.out.println(id + " doing HandleTransfer for client " + clientName + " newNodeId " + newNodeId);
         //check we have this client
         if (!clients.containsKey(clientName)) {
             System.out.println("Got transfer request for unknown client " + clientName);
@@ -504,7 +507,8 @@ public class Node implements  Runnable {
         }
         //set nodeId of that client to reflect the transfer
         ClientInfo_itf tempC = clients.get(clientName);
-        tempC.setNodeId(id);
+        tempC.setNodeId(newNodeId);
+
     }
 
     //Transfers:
