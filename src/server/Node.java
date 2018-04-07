@@ -364,6 +364,7 @@ public class Node implements  Runnable {
                     e.printStackTrace();
                 }
             }
+            return;
         }
 
         // I don't know why you're doing this but it's not my place to judge you.
@@ -405,11 +406,9 @@ public class Node implements  Runnable {
         prevEntry = nodeRouting.putIfAbsent(originID, new Pair<>(nextHop, newDist));
         if (prevEntry == null) {
             neighbourBCast(MessageType.N_RIP,originID + " " + newDist);
-
             if (id == 1)
                 System.out.println("Update1! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
 
-            return;
         } else {
             if (prevEntry.getSecond() > newDist) {
                 // update entry
