@@ -20,12 +20,11 @@ public class Node implements  Runnable {
     private Channel myChannel;
     private Consumer consumer;
     private final String inQueue;
-
     private List<NeighbourInfo_itf> neighbours;
-    private ConcurrentMap<String, ClientInfo_itf> clients;
-    private Map<String, Pair<ClientInfo_itf, Integer>> desiredNames;
-    private Set<String> reservedNames;
 
+    private ConcurrentMap<String, ClientInfo_itf> clients;
+    private ConcurrentMap<String, Pair<ClientInfo_itf, Integer>> desiredNames;
+    private Set<String> reservedNames;
     // Map of ID - (nextStep, dist) for sending and stuff
     private ConcurrentMap<Integer, Pair<Integer, Integer>> nodeRouting;
 
@@ -35,13 +34,17 @@ public class Node implements  Runnable {
         this.neighbours = neighbours;
         nodeRouting = new ConcurrentHashMap<>();
 
+        //Initialize list of clients
+        clients = new ConcurrentHashMap<>();
+        desiredNames = new ConcurrentHashMap<>();
+        reservedNames = ConcurrentHashMap.newKeySet();
+
         //setup incoming channel to this node
         inQueue = String.valueOf(id) + "_queue";
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
 
-        Connection connection = null;
-
+        Connection connection;
         try {
             connection = factory.newConnection();
             myChannel = connection.createChannel();
@@ -68,9 +71,7 @@ public class Node implements  Runnable {
                 Channel channel = connection.createChannel();
                 n.setChannel(channel);
                 channel.queueDeclare(n.getQueueName(), false, false, false, null);
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (TimeoutException e) {
+            } catch (IOException | TimeoutException e) {
                 e.printStackTrace();
             }
         }
@@ -82,13 +83,6 @@ public class Node implements  Runnable {
         //advertise routing info
         // Send <origin, nextHop, dist to this id from sender> to all neighbours
         neighbourBCast(MessageType.N_RIP, id + " " + 0);
-
-
-        //Initialize list of clients
-        clients = new ConcurrentHashMap<>();
-        desiredNames = new HashMap<>();
-        ConcurrentMap<String, String> m = new ConcurrentHashMap<>();
-        reservedNames = m.keySet();
 
         // Build consumer to handle incoming messages
         consumer = new DefaultConsumer(myChannel) {
@@ -372,7 +366,7 @@ public class Node implements  Runnable {
             }
         }
 
-        // I don't know why you're doing this but it's not my place to judge.
+        // I don't know why you're doing this but it's not my place to judge you.
         if (sender.equals(recv)) {
             Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, sender + ": " + msg);
             try {
