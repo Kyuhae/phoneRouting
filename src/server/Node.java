@@ -77,7 +77,10 @@ public class Node implements  Runnable {
         }
         //System.out.println();
 
-
+        //add ourself to list of neighbours
+        NeighbourInfo_itf myInfo = new NeighbourInfo(id, inQueue, "localhost");
+        myInfo.setChannel(myChannel);
+        neighbours.add(myInfo);
         nodeRouting.put(id, new Pair<>(id, 0));
         //server.Node only knows its local neighbours now.
         //advertise routing info
@@ -135,6 +138,14 @@ public class Node implements  Runnable {
                         handleLogin(parts[0], replyQueueName);
                         break;
 
+                    case DISCONNECT:
+                        if (parts.length != 1) {
+                            System.out.println("Invalid disconnect message received. Wrong number of parameters.");
+                            return;
+                        }
+                        handleDisconnect(parts[0]);
+                        break;
+
                     case NAME_LOCK_REQ:
                         handleNameLockReq(msg.getSrc(), msg.getBody());
                         break;
@@ -181,6 +192,32 @@ public class Node implements  Runnable {
 
                     case NAME_LOCK_RELEASE:
                         //someone doesn't need a name anymore, I should update my client info
+                        clients.remove(msg.getBody() );
+                        break;
+
+                    case CLIENT_TRANSFER_REQ:
+                        //a client of mine needs to be transfered to the node he specifies
+                        if (parts.length != 2) {
+                            System.out.println("Invalid CLIENT_TRANSFER_REQ message received. Wrong number of parameters.");
+                            return;
+                        }
+                        int newNodeId = Integer.parseInt(parts[1]);
+                        handleClientTransferReq(parts[0], newNodeId);
+                        break;
+
+                    case TRANSFER:
+                        //a client is being transferred
+                        if (parts.length != 2) {
+                            System.out.println("Invalid TRANSFER message received. Wrong number of parameters.");
+                            return;
+                        }
+                        int transferNodeId = Integer.parseInt(parts[1]);
+                        handleTransfer(msg.getBody(), transferNodeId);
+
+                    case CLIENT_ARRIVAL:
+                        //a client has been transfered to me, and sent me a message. I can deduce its replyqueue
+                        ClientInfo_itf tempC = clients.get(msg.getBody());
+                        tempC.setQueueName(replyQueueName);
                         clients.remove(msg.getBody());
                         break;
 
@@ -284,6 +321,19 @@ public class Node implements  Runnable {
             //try to acquire lock on that name
             bCast(MessageType.NAME_LOCK_REQ, clientName);
         }
+    }
+
+    private void handleDisconnect(String clientName) {
+        if (!clients.containsKey(clientName)) {
+            System.out.println("Got disconnect message from unknown client " + clientName);
+            return;
+        }
+
+        //remove it from my own map of clients
+        clients.remove(clientName);
+
+        //tell other nodes this name is free
+        bCast(MessageType.NAME_LOCK_RELEASE, clientName);
     }
 
     private void handleNameLockReq(int requester, String clientName) {
@@ -427,4 +477,39 @@ public class Node implements  Runnable {
             }
         }
     }
+
+    private void handleClientTransferReq(String clientName, int newNodeId) {
+        //check we have this client
+        if (!clients.containsKey(clientName)) {
+            System.out.println("Got ClientTransfer request from unknown client " + clientName);
+            return;
+        }
+        if (newNodeId < 0 || newNodeId > numOfNodes-1) {
+            System.out.println("Got clientTransfer request to out-of-range node: " + newNodeId);
+            // TODO inform client
+        }
+        ClientInfo_itf tempC = clients.get(clientName);
+        tempC.setNodeId(newNodeId);
+        tempC.setQueueName(null); //TODO adjust depending on what we decide for default QueueName
+
+        //tell newNode about the transfer
+        sendMsgToNode(id, newNodeId, MessageType.TRANSFER, clientName);
+    }
+
+    private void handleTransfer(String clientName, int newNodeId) {
+        //check we have this client
+        if (!clients.containsKey(clientName)) {
+            System.out.println("Got transfer request for unknown client " + clientName);
+            return;
+        }
+        //set nodeId of that client to reflect the transfer
+        ClientInfo_itf tempC = clients.get(clientName);
+        tempC.setNodeId(id);
+    }
+
+    //Transfers:
+    //client tells its node X: i'm going to node Y
+    //node X changes nodeId of that clientInfo to Y
+    //node X informs node Y of the arrival of client
+    //
 }

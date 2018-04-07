@@ -24,6 +24,7 @@ public class Message implements Serializable{
         StringJoiner sj = new StringJoiner(" ");
         for (String p : parts) {
             sj.add(p);
+            System.out.println("adding " + p);
         }
         return new Message(src, dest, type, sj.toString());
     }

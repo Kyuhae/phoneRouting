@@ -21,4 +21,7 @@ public class ClientInfo implements ClientInfo_itf {
         // TODO: set sensible default if not set/ Exception?
         return queueName;
     }
+    public void setNodeId(int id) {
+        nodeId = id;
+    }
 }

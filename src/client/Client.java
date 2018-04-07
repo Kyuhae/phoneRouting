@@ -21,7 +21,10 @@ public class Client {
     private static String replyQueueName;
     private static AMQP.BasicProperties props;
     private static int nodeNum;
+    private static ConnectionFactory factory;
+    private static String nodeHostName;
     private static volatile boolean loggedIn = false;
+    private static  String consumerTag;
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -51,11 +54,11 @@ public class Client {
         }
 
         queueName = nodeNum + "_queue";
-        String nodeHostName = "localhost";
+        nodeHostName = "localhost";
 
         //get name and pos form cmdline
         //login to node given by pos :by sending msg on queue pos+"_queue"
-        ConnectionFactory factory = new ConnectionFactory();
+        factory = new ConnectionFactory();
         factory.setHost(nodeHostName);
 
         try {
@@ -104,7 +107,7 @@ public class Client {
                 }
             };
 
-            channel.basicConsume(replyQueueName, true, consumer);
+            consumerTag = channel.basicConsume(replyQueueName, true, consumer);
 
             System.out.println("Use as\n" +
                     "\tquit\n" +
@@ -117,18 +120,30 @@ public class Client {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             while(!(input = br.readLine()).equals("quit")) {
                 String command = input.split(" ")[0];
+                String[] parts;
                 switch (command) {
                     case "call":
-                        String[] parts = input.split(" ", 3);
+                        parts = input.split(" ", 3);
                         Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_CALL, name, parts[1], parts[2]);
                         channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
                         break;
+
+                    case "changePos":
+                        parts = input.split(" ");
+                        if (parts.length != 3) {
+                            System.out.println("Invalid syntax. Type \"help\" for help");
+                        }
+                        int newX = Integer.parseInt(parts[1]), newY = Integer.parseInt(parts[2]);
+                        changePos(newX, newY);
+                        break;
+
                     case "help": // You want help.
-                    default: // You don't want help. But trust me, you need it.
+                    default: // You didn't ask for help, but trust me, you need it.
                         System.out.println("Use as\n" +
                                 "\tquit\n" +
                                 "\thelp\n" +
-                                "\tcall <receiver> <message>");
+                                "\tcall <receiver> <message>" +
+                                "\tchangePos <newX> <newY>\n");
                 }
             }
         } catch (IOException | TimeoutException e) {
@@ -168,6 +183,16 @@ public class Client {
         }
     }
 
+    static void disconnect() {
+        //tell our node we no longer need this name
+        Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
+        try {
+            channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
         if (x < 0 || x > WORLD_WIDTH - 1 || y < 0 || y > WORLD_HEIGTH - 1) {
             throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
@@ -179,4 +204,56 @@ public class Client {
         int yPos = (y / VER_STRETCH);
         return yPos * GRID_WIDTH + xPos;
     }
+
+    static void changePos(int x, int y) {
+
+        int newNodeNum;
+        try {
+            newNodeNum = posToNodeId(x, y);
+        } catch (InvalidCoordinatesException e) {
+            System.out.println(e.getMessage());
+            return;
+        }
+        if (newNodeNum != nodeNum) {
+            //we need to request a transfer from our original node to the new node
+            System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
+            try {
+                Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name, String.valueOf(newNodeNum));
+                channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+
+
+                //stop old consumer
+                channel.basicCancel(consumerTag);
+
+                //setup a new channel and queues
+                nodeNum = newNodeNum;
+                queueName = nodeNum + "_queue";
+                //here we would change nodeHostName. But all running locally so it stays localhost
+                factory.setHost(nodeHostName);
+                Connection connection = factory.newConnection();
+                channel = connection.createChannel();
+
+                //prepare the name for the queue from node to us
+                replyQueueName = channel.queueDeclare().getQueue();
+                //prepare props
+                final String corrId = UUID.randomUUID().toString();
+                props = new AMQP.BasicProperties
+                        .Builder()
+                        .correlationId(corrId)
+                        .replyTo(replyQueueName)
+                        .build();
+
+                //inform new node of our arrival
+                System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
+                Message message = new Message(-1, nodeNum, MessageType.CLIENT_ARRIVAL, name);
+                channel.basicPublish("", queueName, props, SerializationUtils.serialize(message));
+
+                consumerTag = channel.basicConsume(replyQueueName, true, consumer);
+            } catch (IOException | TimeoutException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
 }
