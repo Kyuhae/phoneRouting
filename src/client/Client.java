@@ -23,6 +23,7 @@ public class Client {
     private static String replyQueueName;
     private static AMQP.BasicProperties props;
     private static int nodeNum;
+    private static volatile boolean loggedIn = false;
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -110,8 +111,9 @@ public class Client {
 
             channel.basicConsume(replyQueueName, true, consumer);
 
-            String input = "";
-
+            while (!loggedIn) {/* La-Di-Da */}
+            System.out.println("Enter user interface");
+            String input;
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             while(!(input = br.readLine()).equals("quit")) {
                 String command = input.split(" ")[0];
@@ -137,7 +139,9 @@ public class Client {
     private static void handleLogin(String message) {
         switch(message) {
             case CLIENT_LOGIN_POS:
-                System.out.println("Successfully logged in!");
+                System.out.println("Successfully logged in as " + name + "!");
+                loggedIn = true;
+                System.out.println("Set loggedIn");
                 break;
 
             case CLIENT_LOGIN_NEG:
@@ -161,7 +165,6 @@ public class Client {
 
             default:
                 System.out.println("unrecognized LOGIN message type");
-
         }
     }
 
