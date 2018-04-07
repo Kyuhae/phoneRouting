@@ -102,7 +102,7 @@ public class Node implements  Runnable {
                 String msgBody = msg.getBody();
                 String[] parts = msgBody.split(" ");
 
-                // Pass through. Nothing to see her for this guy.
+                // Pass through. Nothing to see here for this guy.
                 if (msg.getDest() != id) {
                     sendMsgToNode(msg);
                     return;
@@ -129,6 +129,8 @@ public class Node implements  Runnable {
                     case LOGIN:
                         // block logins until nodeRouting.size() == numOfNodes
                         if (nodeRouting.size() != numOfNodes) {
+                            //inform client that we're not ready to accept logins
+
                             return;
                         }
                         if (parts.length != 1) {
@@ -145,6 +147,7 @@ public class Node implements  Runnable {
 
                     case NAME_LOCK_REPLY:
                         //parse message
+                        // TODO make these checks consistent? we're not always checking parts length...
                         if (parts.length != 2) {
                             System.out.println("Invalid NAME_LOCK_REPLY message received. Wrong number of parameters.");
                             return;
@@ -180,6 +183,11 @@ public class Node implements  Runnable {
                         }
 
                         handleNodeCall(parts[0], parts[1], parts[2]);
+                        break;
+
+                    case NAME_LOCK_RELEASE:
+                        //someone doesn't need a name anymore, I should update my client info
+                        clients.removeIf(c -> c.getName().equals(msg.getBody()));
                         break;
 
                     default:
