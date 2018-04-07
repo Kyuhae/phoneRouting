@@ -13,7 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
-
 public class Node implements  Runnable {
 
     private final int id;
@@ -173,7 +172,25 @@ public class Node implements  Runnable {
                         reservedNames.remove(msg.getBody());
                         break;
 
-                    case CALL:
+                    case CLIENT_CALL:
+                        // Assume: senderName recvName msg
+                        parts = msgBody.split(" ", 3);
+                        if (parts.length != 3) {
+                            System.out.println("Invalid CLIENT_CALL message received. Wrong number of parameters.");
+                            return;
+                        }
+
+                        handleClientCall(parts[0], parts[1], parts[2]);
+                        break;
+
+                    case NODE_CALL:
+                        parts = msgBody.split(" ", 3);
+                        if (parts.length != 3) {
+                            System.out.println("Invalid NODE_CALL message received. Wrong number of parameters.");
+                            return;
+                        }
+
+                        handleNodeCall(parts[0], parts[1], parts[2]);
                         break;
 
                     case NAME_LOCK_RELEASE:
@@ -188,7 +205,23 @@ public class Node implements  Runnable {
                             return;
                         }
                         int newNodeId = Integer.parseInt(parts[1]);
-                        handleClientTransferReq(parts[0], newNodeId;
+                        handleClientTransferReq(parts[0], newNodeId);
+                        break;
+
+                    case TRANSFER:
+                        //a client is being transferred
+                        if (parts.length != 2) {
+                            System.out.println("Invalid TRANSFER message received. Wrong number of parameters.");
+                            return;
+                        }
+                        int newNodeId = Integer.parseInt(parts[1]);
+                        handleTransfer(msg.getBody(), newNodeId);
+
+                    case CLIENT_ARRIVAL:
+                        //a client has been transfered to me, and sent me a message. I can deduce its replyqueue
+                        ClientInfo_itf tempC = clients.get(msg.getBody());
+                        tempC.setQueueName(replyQueueName);
+                        break;
 
                     default:
                         System.out.println("Who is sending useless messages here?");
@@ -237,6 +270,14 @@ public class Node implements  Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void sendMsgToNode(int src, int dest, MessageType type, String ... parts) {
+        StringJoiner sj = new StringJoiner(" ");
+        for (String p : parts) {
+            sj.add(p);
+        }
+        sendMsgToNode(src, dest, type, sj.toString());
     }
 
     private void sendMsgToNode(Message msg) {
@@ -324,7 +365,7 @@ public class Node implements  Runnable {
                 response = "looser";
             }
         }
-        sendMsgToNode(id, requester, MessageType.NAME_LOCK_REPLY, clientName + " " + response);
+        sendMsgToNode(id, requester, MessageType.NAME_LOCK_REPLY, clientName, response);
     }
 
     private void handleNameLockReply(String clientName, String vote) {
@@ -370,9 +411,69 @@ public class Node implements  Runnable {
         }
     }
 
-    private void handleCall() {
-        // client is still here: print to him
-        // client moved between sending and receiving: resend (not caught by pass through!)
+    private void handleClientCall(String sender, String recv, String msg) {
+        ClientInfo_itf recvClient = null;
+        for (ClientInfo_itf c : clients) {
+            if (c.getName().equals(recv)) {
+                recvClient = c;
+                break;
+            }
+        }
+        if (recvClient == null) {
+            // send message to our client that the guy he wants to contact kind of doesn't exist
+            for (ClientInfo_itf c : clients) {
+                if (c.getName().equals(sender)) {
+                    String response = "The client " + recv + " does not exist.";
+                    Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, response);
+                    try {
+                        myChannel.basicPublish("", c.getQueueName(), null,
+                                SerializationUtils.serialize(responseMsg));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+                }
+            }
+            return;
+        }
+
+        // I don't know why you're doing this but it's not my place to judge.
+        if (sender.equals(recv)) {
+            Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, sender + ": " + msg);
+            try {
+                myChannel.basicPublish("", recvClient.getQueueName(), null,
+                        SerializationUtils.serialize(responseMsg));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            sendMsgToNode(id, recvClient.getNodeId(), MessageType.NODE_CALL, sender, recv, msg);
+        }
+    }
+
+    private void handleNodeCall(String sender, String recv, String msg) {
+        ClientInfo_itf recvClient = null;
+        for (ClientInfo_itf c : clients) {
+            if (c.getName().equals(recv)) {
+                recvClient = c;
+                break;
+            }
+        }
+        if (recvClient == null) {
+            return;
+        }
+
+        if (recvClient.getNodeId() == id) {
+            Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, sender + ": " + msg);
+            try {
+                myChannel.basicPublish("", recvClient.getQueueName(), null,
+                        SerializationUtils.serialize(responseMsg));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else { // The client already moved on
+            sendMsgToNode(id, recvClient.getNodeId(), MessageType.NODE_CALL, sender, recv, msg);
+        }
     }
 
     private void handleN_Rip(int originID, int nextHop, int dist) {
@@ -407,11 +508,11 @@ public class Node implements  Runnable {
     private void handleClientTransferReq(String clientName, int newNodeId) {
         //check we have this client
         if (!clients.contains(clientName)) {
-            System.out.println("Got transfer request from unknown client " + clientName);
+            System.out.println("Got ClientTransfer request from unknown client " + clientName);
             return;
         }
         if (newNodeId < 0 || newNodeId > numOfNodes-1) {
-            System.out.println("Got transfer request to out-of-range node: " + newNodeId);
+            System.out.println("Got clientTransfer request to out-of-range node: " + newNodeId);
             // TODO inform client
         }
         ClientInfo_itf tempC = clients.get(clientName);
@@ -419,8 +520,18 @@ public class Node implements  Runnable {
         tempC.setQueueName(null); //TODO adjust depending on what we decide for default QueueName
 
         //tell newNode about the transfer
+        sendMsgToNode(id, newNodeId, MessageType.TRANSFER, clientName);
+    }
 
-
+    private void handleTransfer(String clientName, int newNodeId) {
+        //check we have this client
+        if (!clients.contains(clientName)) {
+            System.out.println("Got transfer request for unknown client " + clientName);
+            return;
+        }
+        //set nodeId of that client to reflect the transfer
+        ClientInfo_itf tempC = clients.get(clientName);
+        tempC.setNodeId(id);
     }
 
     //Transfers:

@@ -1,6 +1,7 @@
 package shared;
 
 import java.io.Serializable;
+import java.util.StringJoiner;
 
 public class Message implements Serializable{
     private final int src;
@@ -17,6 +18,14 @@ public class Message implements Serializable{
         this.dest = dest;
         this.type = type;
         this.body = body;
+    }
+
+    public static Message createMsg(int src, int dest, MessageType type, String ... parts) {
+        StringJoiner sj = new StringJoiner(" ");
+        for (String p : parts) {
+            sj.add(p);
+        }
+        return new Message(src, dest, type, sj.toString());
     }
 
     public int getSrc() {

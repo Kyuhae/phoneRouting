@@ -6,9 +6,10 @@ import static shared.CommunicationConstants.*;
 import shared.Message;
 import shared.MessageType;
 
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.Scanner;
-import java.util.UUID;
+import java.io.InputStreamReader;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
@@ -22,6 +23,8 @@ public class Client {
     private static String replyQueueName;
     private static AMQP.BasicProperties props;
     private static int nodeNum;
+    private static ConnectionFactory factory;
+    private static String nodeHostName;
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -52,11 +55,11 @@ public class Client {
         }
 
         queueName = nodeNum + "_queue";
-        String nodeHostName = "localhost";
+        nodeHostName = "localhost";
 
         //get name and pos form cmdline
         //login to node given by pos :by sending msg on queue pos+"_queue"
-        ConnectionFactory factory = new ConnectionFactory();
+        factory = new ConnectionFactory();
         factory.setHost(nodeHostName);
 
         try {
@@ -73,8 +76,8 @@ public class Client {
                     .replyTo(replyQueueName)
                     .build();
 
-            Message msg = new Message(-1, nodeNum, MessageType.LOGIN, args[0]);
-            channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+            Message loginMsg = new Message(-1, nodeNum, MessageType.LOGIN, args[0]);
+            channel.basicPublish("", queueName, props, SerializationUtils.serialize(loginMsg));
 
             final BlockingQueue<String> response = new ArrayBlockingQueue<String>(1);
 
@@ -98,7 +101,8 @@ public class Client {
                             //handle Login
                             handleLogin(message);
                             break;
-                        case CALL:
+                        case CLIENT_CALL:
+                            System.out.println(msg.getBody());
                             break;
                         default:
                             System.out.println("Who is sending useless messages here?");
@@ -108,14 +112,28 @@ public class Client {
 
             channel.basicConsume(replyQueueName, true, consumer);
 
+            String input = "";
 
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (TimeoutException e) {
+            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+            while(!(input = br.readLine()).equals("quit")) {
+                String command = input.split(" ")[0];
+                switch (command) {
+                    case "call":
+                        String[] parts = input.split(" ", 3);
+                        Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_CALL, name, parts[1], parts[2]);
+                        channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+                        break;
+                    case "help": // You want help.
+                    default: // You didn't ask for help, but trust me, you need it.
+                        System.out.println("Use as\n" +
+                                "\tquit\n" +
+                                "\thelp\n" +
+                                "\tcall <receiver> <message>");
+                }
+            }
+        } catch (IOException | TimeoutException e) {
             e.printStackTrace();
         }
-
-
     }
 
     private static void handleLogin(String message) {
@@ -155,7 +173,7 @@ public class Client {
         channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
     }
 
-    static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
+    private static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
         if (x < 0 || x > WORLD_WIDTH - 1 || y < 0 || y > WORLD_HEIGTH - 1) {
             throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
                     "\tx: [0, " + (WORLD_WIDTH - 1) + "]\n" +
@@ -176,12 +194,41 @@ public class Client {
             e.printStackTrace();
         }
         if (newNodeNum != nodeNum) {
-            //we need to request a transfer
+            //we need to request a transfer from our original node to the new node
             System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
             try {
                 Message msg = new Message(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name + newNodeNum);
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
             } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            //setup a new channel and queues
+            nodeNum = newNodeNum;
+            queueName = nodeNum + "_queue";
+            //here we would change nodeHostName. But all running locally so it stays localhost
+            factory.setHost(nodeHostName);
+
+
+            try {
+                Connection connection = factory.newConnection();
+                channel = connection.createChannel();
+
+                //prepare the name for the queue from node to us
+                replyQueueName = channel.queueDeclare().getQueue();
+                //prepare props
+                final String corrId = UUID.randomUUID().toString();
+                props = new AMQP.BasicProperties
+                        .Builder()
+                        .correlationId(corrId)
+                        .replyTo(replyQueueName)
+                        .build();
+
+                //inform new node of our arrival
+                System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
+                Message msg = new Message(-1, nodeNum, MessageType.CLIENT_ARRIVAL, name);
+                channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+            } catch (IOException | TimeoutException e) {
                 e.printStackTrace();
             }
         }
