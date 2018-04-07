@@ -20,12 +20,11 @@ public class Node implements  Runnable {
     private Channel myChannel;
     private Consumer consumer;
     private final String inQueue;
-
     private List<NeighbourInfo_itf> neighbours;
-    private List<ClientInfo_itf> clients;
-    private Map<String, Pair<ClientInfo_itf, Integer>> desiredNames;
-    private Set<String> reservedNames;
 
+    private ConcurrentMap<String, ClientInfo_itf> clients;
+    private ConcurrentMap<String, Pair<ClientInfo_itf, Integer>> desiredNames;
+    private Set<String> reservedNames;
     // Map of ID - (nextStep, dist) for sending and stuff
     private ConcurrentMap<Integer, Pair<Integer, Integer>> nodeRouting;
 
@@ -35,13 +34,17 @@ public class Node implements  Runnable {
         this.neighbours = neighbours;
         nodeRouting = new ConcurrentHashMap<>();
 
+        //Initialize list of clients
+        clients = new ConcurrentHashMap<>();
+        desiredNames = new ConcurrentHashMap<>();
+        reservedNames = ConcurrentHashMap.newKeySet();
+
         //setup incoming channel to this node
         inQueue = String.valueOf(id) + "_queue";
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
 
-        Connection connection = null;
-
+        Connection connection;
         try {
             connection = factory.newConnection();
             myChannel = connection.createChannel();
@@ -68,27 +71,21 @@ public class Node implements  Runnable {
                 Channel channel = connection.createChannel();
                 n.setChannel(channel);
                 channel.queueDeclare(n.getQueueName(), false, false, false, null);
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (TimeoutException e) {
+            } catch (IOException | TimeoutException e) {
                 e.printStackTrace();
             }
         }
         //System.out.println();
 
-
+        //add ourself to list of neighbours
+        NeighbourInfo_itf myInfo = new NeighbourInfo(id, inQueue, "localhost");
+        myInfo.setChannel(myChannel);
+        neighbours.add(myInfo);
         nodeRouting.put(id, new Pair<>(id, 0));
         //server.Node only knows its local neighbours now.
         //advertise routing info
         // Send <origin, nextHop, dist to this id from sender> to all neighbours
         neighbourBCast(MessageType.N_RIP, id + " " + 0);
-
-
-        //Initialize list of clients
-        clients = new ArrayList<>();
-        desiredNames = new HashMap<>();
-        ConcurrentMap<String, String> m = new ConcurrentHashMap<>();
-        reservedNames = m.keySet();
 
         // Build consumer to handle incoming messages
         consumer = new DefaultConsumer(myChannel) {
@@ -167,8 +164,8 @@ public class Node implements  Runnable {
                         //someone is confirming they got a name (good for them)
                         //add it to clients list, remove it from reserved
                         System.out.println("node " + id + "got NAME_LOCK_ANNOUNCE for " + msg.getBody() + " from " + msg.getSrc());
-                        ClientInfo_itf newClient = new ClientInfo(msg.getSrc(), msg.getBody());
-                        clients.add(newClient);
+                        ClientInfo_itf newClient = new ClientInfo(msg.getSrc());
+                        clients.put(msg.getBody(), newClient);
                         reservedNames.remove(msg.getBody());
                         break;
 
@@ -214,13 +211,14 @@ public class Node implements  Runnable {
                             System.out.println("Invalid TRANSFER message received. Wrong number of parameters.");
                             return;
                         }
-                        int newNodeId = Integer.parseInt(parts[1]);
-                        handleTransfer(msg.getBody(), newNodeId);
+                        int transferNodeId = Integer.parseInt(parts[1]);
+                        handleTransfer(msg.getBody(), transferNodeId);
 
                     case CLIENT_ARRIVAL:
                         //a client has been transfered to me, and sent me a message. I can deduce its replyqueue
                         ClientInfo_itf tempC = clients.get(msg.getBody());
                         tempC.setQueueName(replyQueueName);
+                        clients.remove(msg.getBody());
                         break;
 
                     default:
@@ -298,12 +296,7 @@ public class Node implements  Runnable {
         //is the name he wants available on my node?
         boolean available = true;
         //check if I already know of an established client with this name
-        for (ClientInfo_itf c : this.clients) {
-            if (c.getName().equals(clientName)) {
-                available = false;
-            }
-        }
-        if (!available)
+        if (clients.containsKey(clientName))
             System.out.println("A client already has name" + clientName);
 
         //check if there is an ongoing election process for this name
@@ -320,7 +313,7 @@ public class Node implements  Runnable {
         }
         else {
             //add name to desired list, and initialize nbResponse counter
-            ClientInfo_itf clientInfo = new ClientInfo(id, clientName);
+            ClientInfo_itf clientInfo = new ClientInfo(id);
             clientInfo.setQueueName(replyQueueName);
             Pair<ClientInfo_itf, Integer> newClient = new Pair<>(clientInfo, 0);
 
@@ -331,7 +324,7 @@ public class Node implements  Runnable {
     }
 
     private void handleDisconnect(String clientName) {
-        if (!clients.contains(clientName)) {
+        if (!clients.containsKey(clientName)) {
             System.out.println("Got disconnect message from unknown client " + clientName);
             return;
         }
@@ -344,19 +337,14 @@ public class Node implements  Runnable {
     }
 
     private void handleNameLockReq(int requester, String clientName) {
-        boolean available = true;
         String response = "winner";
         // check if we know a client with this name already exists
-        for (ClientInfo_itf c : clients) {
-            if (c.getName().equals(clientName)) {
-                System.out.println("Billy is already claimed by an existing client on node " + c.getNodeId());
-                response = "looser";
-                available = false;
-            }
-        }
-
-        //if no clients have this name yet, and we also want this name
-        if (available && desiredNames.containsKey(clientName)) {
+        if (clients.containsKey(clientName)) {
+            // TODO: What if clientName gets removed in between? Sucks, but this error is just due to debugs. Remove.
+            System.out.println("Billy is already claimed by an existing client on node " + clients.get(clientName).getNodeId());
+            response = "looser";
+        } else if (desiredNames.containsKey(clientName)) {
+            //if no clients have this name yet, and we also want this name
             System.out.println("Hey! I (node " + id +") want that name too!");
             //determine which of us is higher priority
             if (requester < id) {
@@ -369,10 +357,10 @@ public class Node implements  Runnable {
     }
 
     private void handleNameLockReply(String clientName, String vote) {
-        String response = CLIENT_LOGIN_NEG;
+        String response;
         System.out.println("Node " + id + "got NAME_LOCK_REPLY for " + clientName);
         if (!desiredNames.containsKey(clientName)) {
-            System.out.println("I have no memory of requesting this name... " + clientName);
+            //System.out.println("I have no memory of requesting this name... " + clientName);
             return;
         }
 
@@ -392,7 +380,7 @@ public class Node implements  Runnable {
                 return;
             } else {
                 // all positive responses! -> We won!
-                clients.add(client);
+                clients.put(clientName, client);
                 desiredNames.remove(clientName);
                 // announce this name as ours
                 bCast(MessageType.NAME_LOCK_ANNOUNCE, clientName);
@@ -412,32 +400,23 @@ public class Node implements  Runnable {
     }
 
     private void handleClientCall(String sender, String recv, String msg) {
-        ClientInfo_itf recvClient = null;
-        for (ClientInfo_itf c : clients) {
-            if (c.getName().equals(recv)) {
-                recvClient = c;
-                break;
-            }
-        }
+        ClientInfo_itf recvClient = clients.get(recv);
         if (recvClient == null) {
-            // send message to our client that the guy he wants to contact kind of doesn't exist
-            for (ClientInfo_itf c : clients) {
-                if (c.getName().equals(sender)) {
-                    String response = "The client " + recv + " does not exist.";
-                    Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, response);
-                    try {
-                        myChannel.basicPublish("", c.getQueueName(), null,
-                                SerializationUtils.serialize(responseMsg));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    break;
+            // Send Message to our client that his buddy does not exist
+            ClientInfo_itf senderClient = clients.get(sender);
+            if (senderClient != null) {
+                String response = "The client " + recv + " does not exist.";
+                Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, response);
+                try {
+                    myChannel.basicPublish("", senderClient.getQueueName(), null,
+                            SerializationUtils.serialize(responseMsg));
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
-            return;
         }
 
-        // I don't know why you're doing this but it's not my place to judge.
+        // I don't know why you're doing this but it's not my place to judge you.
         if (sender.equals(recv)) {
             Message responseMsg = new Message(id, -1, MessageType.CLIENT_CALL, sender + ": " + msg);
             try {
@@ -452,13 +431,7 @@ public class Node implements  Runnable {
     }
 
     private void handleNodeCall(String sender, String recv, String msg) {
-        ClientInfo_itf recvClient = null;
-        for (ClientInfo_itf c : clients) {
-            if (c.getName().equals(recv)) {
-                recvClient = c;
-                break;
-            }
-        }
+        ClientInfo_itf recvClient = clients.get(recv);
         if (recvClient == null) {
             return;
         }
@@ -507,7 +480,7 @@ public class Node implements  Runnable {
 
     private void handleClientTransferReq(String clientName, int newNodeId) {
         //check we have this client
-        if (!clients.contains(clientName)) {
+        if (!clients.containsKey(clientName)) {
             System.out.println("Got ClientTransfer request from unknown client " + clientName);
             return;
         }
@@ -525,7 +498,7 @@ public class Node implements  Runnable {
 
     private void handleTransfer(String clientName, int newNodeId) {
         //check we have this client
-        if (!clients.contains(clientName)) {
+        if (!clients.containsKey(clientName)) {
             System.out.println("Got transfer request for unknown client " + clientName);
             return;
         }
