@@ -142,6 +142,14 @@ public class Node implements  Runnable {
                         handleLogin(parts[0], replyQueueName);
                         break;
 
+                    case DISCONNECT:
+                        if (parts.length != 1) {
+                            System.out.println("Invalid disconnect message received. Wrong number of parameters.");
+                            return;
+                        }
+                        handleDisconnect(parts[0]);
+                        break;
+
                     case NAME_LOCK_REQ:
                         handleNameLockReq(msg.getSrc(), msg.getBody());
                         break;
@@ -170,8 +178,17 @@ public class Node implements  Runnable {
 
                     case NAME_LOCK_RELEASE:
                         //someone doesn't need a name anymore, I should update my client info
-                        clients.removeIf(c -> c.getName().equals(msg.getBody()));
+                        clients.remove(msg.getBody() );
                         break;
+
+                    case CLIENT_TRANSFER_REQ:
+                        //a client of mine needs to be transfered to the node he specifies
+                        if (parts.length != 2) {
+                            System.out.println("Invalid CLIENT_TRANSFER_REQ message received. Wrong number of parameters.");
+                            return;
+                        }
+                        int newNodeId = Integer.parseInt(parts[1]);
+                        handleClientTransferReq(parts[0], newNodeId;
 
                     default:
                         System.out.println("Who is sending useless messages here?");
@@ -272,6 +289,19 @@ public class Node implements  Runnable {
         }
     }
 
+    private void handleDisconnect(String clientName) {
+        if (!clients.contains(clientName)) {
+            System.out.println("Got disconnect message from unknown client " + clientName);
+            return;
+        }
+
+        //remove it from my own map of clients
+        clients.remove(clientName);
+
+        //tell other nodes this name is free
+        bCast(MessageType.NAME_LOCK_RELEASE, clientName);
+    }
+
     private void handleNameLockReq(int requester, String clientName) {
         boolean available = true;
         String response = "winner";
@@ -355,7 +385,6 @@ public class Node implements  Runnable {
             if (id == 1)
                 System.out.println("Update1! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
 
-            return;
         } else {
             if (prevEntry.getSecond() > newDist) {
                 // update entry
@@ -374,4 +403,29 @@ public class Node implements  Runnable {
             }
         }
     }
+
+    private void handleClientTransferReq(String clientName, int newNodeId) {
+        //check we have this client
+        if (!clients.contains(clientName)) {
+            System.out.println("Got transfer request from unknown client " + clientName);
+            return;
+        }
+        if (newNodeId < 0 || newNodeId > numOfNodes-1) {
+            System.out.println("Got transfer request to out-of-range node: " + newNodeId);
+            // TODO inform client
+        }
+        ClientInfo_itf tempC = clients.get(clientName);
+        tempC.setNodeId(newNodeId);
+        tempC.setQueueName(null); //TODO adjust depending on what we decide for default QueueName
+
+        //tell newNode about the transfer
+
+
+    }
+
+    //Transfers:
+    //client tells its node X: i'm going to node Y
+    //node X changes nodeId of that clientInfo to Y
+    //node X informs node Y of the arrival of client
+    //
 }

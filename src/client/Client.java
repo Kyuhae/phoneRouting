@@ -108,6 +108,7 @@ public class Client {
 
             channel.basicConsume(replyQueueName, true, consumer);
 
+
         } catch (IOException e) {
             e.printStackTrace();
         } catch (TimeoutException e) {
@@ -148,6 +149,12 @@ public class Client {
         }
     }
 
+    static void disconnect() {
+        //tell our node we no longer need this name
+        Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
+        channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+    }
+
     static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
         if (x < 0 || x > WORLD_WIDTH - 1 || y < 0 || y > WORLD_HEIGTH - 1) {
             throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
@@ -159,4 +166,26 @@ public class Client {
         int yPos = (y / VER_STRETCH);
         return yPos * GRID_WIDTH + xPos;
     }
+
+    static void changePos(int x, int y) {
+
+        int newNodeNum = 0;
+        try {
+            newNodeNum = posToNodeId(x, y);
+        } catch (InvalidCoordinatesException e) {
+            e.printStackTrace();
+        }
+        if (newNodeNum != nodeNum) {
+            //we need to request a transfer
+            System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
+            try {
+                Message msg = new Message(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name + newNodeNum);
+                channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
 }
