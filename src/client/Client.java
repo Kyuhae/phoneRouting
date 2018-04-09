@@ -25,6 +25,7 @@ public class Client {
     private static String nodeHostName;
     private static volatile boolean loggedIn = false;
     private static  String consumerTag;
+    private static  Connection connection;
 
     public static void main(String[] args) {
         if (args.length != 3) {
@@ -62,7 +63,7 @@ public class Client {
         factory.setHost(nodeHostName);
 
         try {
-            Connection connection = factory.newConnection();
+            connection = factory.newConnection();
             channel = connection.createChannel();
 
             //prepare the name for the queue from node to us
@@ -114,29 +115,47 @@ public class Client {
                     "\thelp\n" +
                     "\tcall <receiver> <message>");
 
+            boolean quit = false;
             while (!loggedIn) {/* La-Di-Da */}
             System.out.println("Enter user interface");
             String input;
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-            while(!(input = br.readLine()).equals("quit")) {
+            input = br.readLine();
+            while(!quit) {
                 String command = input.split(" ")[0];
                 String[] parts;
                 switch (command) {
                     case "call":
                         parts = input.split(" ", 3);
-                        Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_CALL, name, parts[1], parts[2]);
-                        channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+                        if (parts.length != 3) {
+                            System.out.println("Invalid syntax. Type \"help\" for help");
+                        } else {
+                            Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_CALL, name, parts[1], parts[2]);
+                            channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+                        }
                         break;
 
                     case "changePos":
                         parts = input.split(" ");
                         if (parts.length != 3) {
                             System.out.println("Invalid syntax. Type \"help\" for help");
+                        } else {
+                            int newX = Integer.parseInt(parts[1]);
+                            int newY = Integer.parseInt(parts[2]);
+                            changePos(newX, newY);
+                            System.out.println("finished doing changePos");
                         }
-                        int newX = Integer.parseInt(parts[1]);
-                        int newY = Integer.parseInt(parts[2]);
-                        changePos(newX, newY);
-                        System.out.println("finished doing changePos");
+                        break;
+
+                    case "quit":
+                        parts = input.split(" ");
+                        if (parts.length != 1) {
+                            System.out.println("Invalid syntax. Type \"help\" for help");
+                        } else {
+                            System.out.println("Disconnecting.");
+                            disconnect();
+                            quit = true;
+                        }
                         break;
 
                     case "help": // You want help.
@@ -147,10 +166,15 @@ public class Client {
                                 "\tcall <receiver> <message>" +
                                 "\tchangePos <newX> <newY>\n");
                 }
+                if (!quit) {
+                    input = br.readLine();
+                }
+
             }
         } catch (IOException | TimeoutException e) {
             e.printStackTrace();
         }
+
     }
 
     private static void handleLogin(String message) {
@@ -187,10 +211,16 @@ public class Client {
 
     private static void disconnect() {
         //tell our node we no longer need this name
+        System.out.println("sending disconnect msg");
         Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
         try {
             channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+            channel.basicCancel(consumerTag);
+            channel.close();
+            connection.close();
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (TimeoutException e) {
             e.printStackTrace();
         }
     }
@@ -254,6 +284,4 @@ public class Client {
             }
         }
     }
-
-
 }

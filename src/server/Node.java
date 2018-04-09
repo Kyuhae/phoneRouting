@@ -13,6 +13,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
+//TODO clean debug prints
+//TODO add comments
+//TODO write explanation file
+//TODO make JAR
+//TODO prepare slides + demo :D
+
 public class Node implements  Runnable {
 
     private final int id;
@@ -143,6 +149,7 @@ public class Node implements  Runnable {
                             System.out.println("Invalid disconnect message received. Wrong number of parameters.");
                             return;
                         }
+                        System.out.println(id + " got disconnect from client " + parts[0]);
                         handleDisconnect(parts[0]);
                         break;
 
@@ -192,7 +199,8 @@ public class Node implements  Runnable {
 
                     case NAME_LOCK_RELEASE:
                         //someone doesn't need a name anymore, I should update my client info
-                        clients.remove(msg.getBody() );
+                        System.out.println("client name " + msg.getBody() + " is no longer used. (got LOCK_RELEASE)");
+                        clients.remove(msg.getBody());
                         break;
 
                     case CLIENT_TRANSFER_REQ:
