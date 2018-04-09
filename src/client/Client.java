@@ -218,6 +218,7 @@ public class Client {
         }
         if (newNodeNum != nodeNum) {
             //we need to request a transfer from our original node to the new node
+            System.out.println(name + "Requesting transfer from " + nodeNum + " to " + newNodeNum);
             try {
                 Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name, String.valueOf(newNodeNum));
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
@@ -244,7 +245,6 @@ public class Client {
                         .build();
 
                 //inform new node of our arrival
-                System.out.println(name + "Requesting transfer from " + nodeNum + " to " + newNodeNum);
                 Message message = new Message(-1, nodeNum, MessageType.CLIENT_ARRIVAL, name);
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(message));
 

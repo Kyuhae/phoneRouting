@@ -216,10 +216,9 @@ public class Node implements  Runnable {
 
                     case CLIENT_ARRIVAL:
                         //a client has been transfered to me, and sent me a message. I can deduce its replyqueue
-                        System.out.println("node " + id + " got ARRIVAL notification from client " + msg.getBody());
+                        System.out.println("node " + id + " got ARRIVAL notification from client " + parts[0]);
                         ClientInfo_itf tempC = clients.get(parts[0]);
                         tempC.setQueueName(replyQueueName);
-                        clients.remove(msg.getBody());
                         break;
 
                     default:
