@@ -133,8 +133,10 @@ public class Client {
                         if (parts.length != 3) {
                             System.out.println("Invalid syntax. Type \"help\" for help");
                         }
-                        int newX = Integer.parseInt(parts[1]), newY = Integer.parseInt(parts[2]);
+                        int newX = Integer.parseInt(parts[1]);
+                        int newY = Integer.parseInt(parts[2]);
                         changePos(newX, newY);
+                        System.out.println("finished doing changePos");
                         break;
 
                     case "help": // You want help.
@@ -183,7 +185,7 @@ public class Client {
         }
     }
 
-    static void disconnect() {
+    private static void disconnect() {
         //tell our node we no longer need this name
         Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
         try {
@@ -205,7 +207,7 @@ public class Client {
         return yPos * GRID_WIDTH + xPos;
     }
 
-    static void changePos(int x, int y) {
+    private static void changePos(int x, int y) {
 
         int newNodeNum;
         try {
@@ -216,7 +218,6 @@ public class Client {
         }
         if (newNodeNum != nodeNum) {
             //we need to request a transfer from our original node to the new node
-            System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
             try {
                 Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name, String.valueOf(newNodeNum));
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
@@ -243,7 +244,7 @@ public class Client {
                         .build();
 
                 //inform new node of our arrival
-                System.out.println("Requesting transfer from " + nodeNum + " to " + newNodeNum);
+                System.out.println(name + "Requesting transfer from " + nodeNum + " to " + newNodeNum);
                 Message message = new Message(-1, nodeNum, MessageType.CLIENT_ARRIVAL, name);
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(message));
 

@@ -22,6 +22,7 @@ public class ClientInfo implements ClientInfo_itf {
         return queueName;
     }
     public void setNodeId(int id) {
-        nodeId = id;
+        this.nodeId = id;
+        System.out.println("node id changed to " + this.nodeId);
     }
 }
