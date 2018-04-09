@@ -10,8 +10,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
 
 public class Client {
@@ -36,14 +34,13 @@ public class Client {
 
         //clientName, clientX, clientY
         name = args[0];
-        // He who passes invalid parameters deserves the crash and burn
         int xPos = 0;
         int yPos = 0;
         try {
             xPos = Integer.parseInt(args[1]);
             yPos = Integer.parseInt(args[2]);
-        } catch (NumberFormatException nfe) {
-            System.out.println("The x and y position need to be given as integers. Call the program with <String, Integer, Integer>");
+        } catch (NumberFormatException nfe) { // He who passes invalid parameters deserves the crash and burn
+            System.out.println("The x and y position need to be given as integers. Call the program with <String> <Integer> <Integer>");
             nfe.printStackTrace();
             System.exit(1);
         }
@@ -81,8 +78,6 @@ public class Client {
             Message loginMsg = new Message(-1, nodeNum, MessageType.LOGIN, args[0]);
             channel.basicPublish("", queueName, props, SerializationUtils.serialize(loginMsg));
 
-            final BlockingQueue<String> response = new ArrayBlockingQueue<String>(1);
-
             consumer = new DefaultConsumer(channel) {
                 @Override
                 public void handleDelivery (String consumerTag, Envelope envelope,
@@ -113,6 +108,11 @@ public class Client {
             };
 
             consumerTag = channel.basicConsume(replyQueueName, true, consumer);
+
+            System.out.println("Use as\n" +
+                    "\tquit\n" +
+                    "\thelp\n" +
+                    "\tcall <receiver> <message>");
 
             while (!loggedIn) {/* La-Di-Da */}
             System.out.println("Enter user interface");
