@@ -221,7 +221,6 @@ public class Client {
                 Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name, String.valueOf(newNodeNum));
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
 
-
                 //stop old consumer
                 channel.basicCancel(consumerTag);
 
