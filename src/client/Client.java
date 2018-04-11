@@ -119,7 +119,7 @@ public class Client {
             System.out.println("Use as\n" +
                     "\tquit\n" +
                     "\thelp\n" +
-                    "\tcall <receiver> <message>");
+                    "\tcall <receiverName> <message>");
 
             boolean quit = false;
             while (!loggedIn) {/* La-Di-Da */}
@@ -213,7 +213,7 @@ public class Client {
     }
 
     private static void disconnect() {
-        System.out.println("sending disconnect msg");
+        System.out.println("Disconnecting...");
         Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
         try {
             //tell our node we no longer need this name
@@ -254,7 +254,7 @@ public class Client {
         //check if they should be transferred to a different node given new World position
         if (newNodeNum != nodeNum) {
             //we need to request a transfer from our original node to the new node
-            System.out.println(name + "Requesting transfer from " + nodeNum + " to " + newNodeNum);
+            System.out.println("Requesting transfer from node" + nodeNum + " to node " + newNodeNum);
             try {
                 Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_TRANSFER_REQ, name, String.valueOf(newNodeNum));
                 channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
@@ -290,6 +290,7 @@ public class Client {
             } catch (IOException | TimeoutException e) {
                 e.printStackTrace();
             }
+            System.out.println("Transfer to node " + newNodeNum + " complete.");
         }
     }
 }

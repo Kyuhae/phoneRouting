@@ -83,7 +83,8 @@ public class Node implements  Runnable {
         myInfo.setChannel(myChannel);
         neighbours.add(myInfo);
         nodeRouting.put(id, new Pair<>(id, 0));
-        //server.Node only knows its local neighbours now.
+
+        //Node only knows its local neighbours now.
         //advertise routing info
         // Send <origin, nextHop, dist to this id from sender> to all neighbours
         neighbourBCast(MessageType.N_RIP, id + " " + 0);
@@ -112,12 +113,10 @@ public class Node implements  Runnable {
                             System.out.println("Invalid network broadcast received. Wrong number of parameters.");
                             return;
                         }
-
                         try {
                             int originId = Integer.parseInt(parts[0]);
                             int dist = Integer.parseInt(parts[1]);
                             handleN_Rip(originId, msg.getSrc(), dist);
-
                         } catch (NumberFormatException nfe) {
                             System.out.println("Invalid network broadcast received. Id or dist not an Integer.");
                             nfe.printStackTrace();
@@ -129,7 +128,6 @@ public class Node implements  Runnable {
                             System.out.println("Invalid login message received. Wrong number of parameters.");
                             return;
                         }
-
                         handleLogin(parts[0], replyQueueName);
                         break;
 
@@ -147,8 +145,6 @@ public class Node implements  Runnable {
                         break;
 
                     case NAME_LOCK_REPLY:
-                        //parse message
-                        // TODO make these checks consistent? we're not always checking parts length...
                         if (parts.length != 2) {
                             System.out.println("Invalid NAME_LOCK_REPLY message received. Wrong number of parameters.");
                             return;
@@ -157,9 +153,8 @@ public class Node implements  Runnable {
                         break;
 
                     case NAME_LOCK_ANNOUNCE:
-                        //someone is confirming they got a name (good for them)
+                        //someone is confirming they got a name
                         //add it to clients list, remove it from reserved
-                        System.out.println("node " + id + "got NAME_LOCK_ANNOUNCE for " + msg.getBody() + " from " + msg.getSrc());
                         ClientInfo_itf newClient = new ClientInfo(msg.getSrc());
                         clients.put(msg.getBody(), newClient);
                         reservedNames.remove(msg.getBody());
@@ -188,7 +183,6 @@ public class Node implements  Runnable {
 
                     case NAME_LOCK_RELEASE:
                         //someone doesn't need a name anymore, I should update my client info
-                        System.out.println("client name " + msg.getBody() + " is no longer used. (got LOCK_RELEASE)");
                         clients.remove(msg.getBody());
                         break;
 
@@ -213,7 +207,6 @@ public class Node implements  Runnable {
 
                     case CLIENT_ARRIVAL:
                         //a client has been transfered to me, and sent me a message. I can deduce its replyqueue
-                        System.out.println("node " + id + " got ARRIVAL notification from client " + parts[0]);
                         ClientInfo_itf tempC = clients.get(parts[0]);
                         tempC.setQueueName(replyQueueName);
                         break;
@@ -340,14 +333,11 @@ public class Node implements  Runnable {
 
     private void handleNameLockReq(int requester, String clientName) {
         String response = "winner";
-        // check if we know a client with this name already exists
+        // check if we know a client with this name
         if (clients.containsKey(clientName)) {
-            // TODO: What if clientName gets removed in between? Sucks, but this error is just due to debugs. Remove.
-            System.out.println("Billy is already claimed by an existing client on node " + clients.get(clientName).getNodeId());
             response = "looser";
         } else if (desiredNames.containsKey(clientName)) {
             //if no clients have this name yet, and we also want this name
-            System.out.println("Hey! I (node " + id +") want that name too!");
             //determine which of us is higher priority
             if (requester < id) {
                 response = "winner";
@@ -360,9 +350,7 @@ public class Node implements  Runnable {
 
     private void handleNameLockReply(String clientName, String vote) {
         String response;
-        System.out.println("Node " + id + "got NAME_LOCK_REPLY for " + clientName);
         if (!desiredNames.containsKey(clientName)) {
-            //System.out.println("I have no memory of requesting this name... " + clientName);
             return;
         }
 
@@ -371,11 +359,9 @@ public class Node implements  Runnable {
 
         if (vote.equals("looser")) {
             //one negative response! -> We lost!
-            System.out.println("Negative response for name " + clientName + " received");
             response = CLIENT_LOGIN_NEG;
             desiredNames.remove(clientName);
         } else {
-            System.out.println("positive response for name " + clientName + " received. num of nodes " + numOfNodes);
             infoPair.setSecond(infoPair.getSecond() + 1);
             if (infoPair.getSecond() != numOfNodes-1) {
                 //we haven't received enough answers yet.
@@ -395,7 +381,7 @@ public class Node implements  Runnable {
             myChannel.basicPublish("", client.getQueueName(), null,
                     SerializationUtils.serialize(responseMsg));
         } catch (IOException e) {
-            // TODO: tell others that client did not login after all? (relatively unimportant robustness-thingy)
+            // TODO: tell others that client did not login after all? (robustness improvement)
             System.out.println("Unable to confirm name winning to client");
             e.printStackTrace();
         }
@@ -458,9 +444,6 @@ public class Node implements  Runnable {
         prevEntry = nodeRouting.putIfAbsent(originID, new Pair<>(nextHop, newDist));
         if (prevEntry == null) {
             neighbourBCast(MessageType.N_RIP,originID + " " + newDist);
-            if (id == 1)
-                System.out.println("Update1! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
-
         } else {
             if (prevEntry.getSecond() > newDist) {
                 // update entry
@@ -468,12 +451,10 @@ public class Node implements  Runnable {
                     if (prevEntry.getSecond() > newDist) {
                         prevEntry.setSecond(newDist);
                         prevEntry.setFirst(nextHop);
-                        if (id == 1)
-                            System.out.println("Update2! server.Node: " + originID + ", nextHop: " + nextHop + ", dist: " + newDist);
                     }
                 }
 
-                // tell all neighbours about this great new thing!
+                // tell all neighbours about this great new routing information!
                 // Send <sender, id this is about, dist to this id from sender> to all neighbours
                 neighbourBCast(MessageType.N_RIP,originID + " " + newDist);
             }
@@ -481,29 +462,30 @@ public class Node implements  Runnable {
     }
 
     private void handleClientTransferReq(String clientName, int newNodeId) {
-        System.out.println(id + " doing HandleCLientTransferReq for client " + clientName + " newNodeId " + newNodeId);
         //check we have this client
         if (!clients.containsKey(clientName)) {
             System.out.println("Got ClientTransfer request from unknown client " + clientName);
             return;
         }
         if (newNodeId < 0 || newNodeId > numOfNodes-1) {
+            // This shouldn't happen anyway, given our Client checks this when converting from world coords to nodeId
             System.out.println("Got clientTransfer request to out-of-range node: " + newNodeId);
-            // TODO inform client
+            return;
         }
+
+        //update our local information about which node the client is on
         ClientInfo_itf tempC = clients.get(clientName);
         tempC.setNodeId(newNodeId);
-        tempC.setQueueName(null); //TODO adjust depending on what we decide for default QueueName
+        tempC.setQueueName(null);
 
         //tell everyone about the transfer
         bCast(MessageType.TRANSFER, clientName + " " + newNodeId);
     }
 
     private void handleTransfer(String clientName, int newNodeId) {
-        System.out.println(id + " doing HandleTransfer for client " + clientName + " newNodeId " + newNodeId);
         //check we have this client
         if (!clients.containsKey(clientName)) {
-            System.out.println("Got transfer request for unknown client " + clientName);
+            System.out.println("Got transfer message for unknown client " + clientName);
             return;
         }
         //set nodeId of that client to reflect the transfer
@@ -511,10 +493,4 @@ public class Node implements  Runnable {
         tempC.setNodeId(newNodeId);
 
     }
-
-    //Transfers:
-    //client tells its node X: i'm going to node Y
-    //node X changes nodeId of that clientInfo to Y
-    //node X informs node Y of the arrival of client
-    //
 }
