@@ -106,7 +106,7 @@ public class Client {
                             break;
 
                         default:
-                            System.out.println("Who is sending useless messages here?");
+                            System.out.println("Unrecognized message type");
                     }
                 }
             };
@@ -261,13 +261,15 @@ public class Client {
 
                 //stop old consumer
                 channel.basicCancel(consumerTag);
+                channel.close();
+                connection.close();
 
                 //setup a new channel and queues
                 nodeNum = newNodeNum;
                 queueName = nodeNum + "_queue";
                 //here we would change nodeHostName. But all running locally so it stays localhost
                 factory.setHost(nodeHostName);
-                Connection connection = factory.newConnection();
+                connection = factory.newConnection();
                 channel = connection.createChannel();
 
                 //prepare the name for the queue from node to us

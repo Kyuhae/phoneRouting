@@ -125,12 +125,6 @@ public class Node implements  Runnable {
                         break;
 
                     case LOGIN:
-                        // block logins until nodeRouting.size() == numOfNodes
-                        if (nodeRouting.size() != numOfNodes) {
-                            //inform client that we're not ready to accept logins
-
-                            return;
-                        }
                         if (parts.length != 1) {
                             System.out.println("Invalid login message received. Wrong number of parameters.");
                             return;
@@ -225,7 +219,7 @@ public class Node implements  Runnable {
                         break;
 
                     default:
-                        System.out.println("Who is sending useless messages here?");
+                        System.out.println("Unrecognized message type");
                 }
             }
         };
@@ -296,6 +290,11 @@ public class Node implements  Runnable {
 
     private void handleLogin(String clientName, String replyQueueName) {
         System.out.println("Login for client " + clientName + " requested.");
+
+        // block logins until nodeRouting.size() == numOfNodes
+        if (nodeRouting.size() != numOfNodes) {
+            return;
+        }
         //is the name he wants available on my node?
         boolean available = true;
         //check if I already know of an established client with this name
@@ -308,7 +307,7 @@ public class Node implements  Runnable {
         if (!available) {
             //already know it's pointless, ask for another name
             try {
-                Message msg = new Message(id, -1, MessageType.LOGIN, "nameInUse");
+                Message msg = new Message(id, -1, MessageType.LOGIN, CLIENT_LOGIN_NEG);
                 myChannel.basicPublish("", replyQueueName, null, SerializationUtils.serialize(msg));
             } catch (IOException e) {
                 e.printStackTrace();
