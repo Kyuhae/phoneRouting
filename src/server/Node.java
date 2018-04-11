@@ -13,13 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
-//TODO quitting doesn't quite work!!!!   quit from original nod OK, quit after changePos NOT OK!!!
-// need to properly understand when to close connection / channel...
-//TODO clean debug prints
-//TODO add comments
-//TODO write explanation file
-//TODO make JAR
-//TODO prepare slides + demo :D
 
 public class Node implements  Runnable {
 
@@ -136,7 +129,7 @@ public class Node implements  Runnable {
                             System.out.println("Invalid disconnect message received. Wrong number of parameters.");
                             return;
                         }
-                        System.out.println(id + " got disconnect from client " + parts[0]);
+                        System.out.println("Node" + id + " got disconnect from client " + parts[0]);
                         handleDisconnect(parts[0]);
                         break;
 
@@ -292,7 +285,7 @@ public class Node implements  Runnable {
         boolean available = true;
         //check if I already know of an established client with this name
         if (clients.containsKey(clientName))
-            System.out.println("A client already has name" + clientName);
+            System.out.println("A client already has name " + clientName);
 
         //check if there is an ongoing election process for this name
         available = (available && !reservedNames.contains(clientName));

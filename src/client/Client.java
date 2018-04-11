@@ -48,7 +48,7 @@ public class Client {
         //setup queue from us to node
         try {
             nodeNum = posToNodeId(xPos, yPos);
-            System.out.println("Pos: " + posToNodeId(xPos, yPos));
+            System.out.println("Zone: " + posToNodeId(xPos, yPos));
         } catch (InvalidCoordinatesException e) {
             System.out.println(e.getMessage());
             return;
@@ -57,7 +57,7 @@ public class Client {
         queueName = nodeNum + "_queue";
         nodeHostName = "localhost";
 
-        //get name and pos form cmdline
+        //get name and pos from cmdline
         //login to node given by pos :by sending msg on queue pos+"_queue"
         factory = new ConnectionFactory();
         factory.setHost(nodeHostName);
@@ -213,7 +213,6 @@ public class Client {
     }
 
     private static void disconnect() {
-        System.out.println("Disconnecting...");
         Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
         try {
             //tell our node we no longer need this name

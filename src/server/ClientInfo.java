@@ -18,11 +18,9 @@ public class ClientInfo implements ClientInfo_itf {
     }
 
     public String getQueueName() {
-        // TODO: set sensible default if not set/ Exception?
         return queueName;
     }
     public void setNodeId(int id) {
         this.nodeId = id;
-        System.out.println("node id changed to " + this.nodeId);
     }
 }
