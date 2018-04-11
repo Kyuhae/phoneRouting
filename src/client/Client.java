@@ -99,17 +99,23 @@ public class Client {
                             //handle Login
                             handleLogin(message);
                             break;
+
                         case CLIENT_CALL:
+                            // Display message that we received
                             System.out.println(msg.getBody());
                             break;
+
                         default:
                             System.out.println("Who is sending useless messages here?");
                     }
                 }
             };
 
+            // Run consumer to process arriving messages
             consumerTag = channel.basicConsume(replyQueueName, true, consumer);
 
+
+            // User interaction: Console
             System.out.println("Use as\n" +
                     "\tquit\n" +
                     "\thelp\n" +
@@ -117,10 +123,10 @@ public class Client {
 
             boolean quit = false;
             while (!loggedIn) {/* La-Di-Da */}
-            System.out.println("Enter user interface");
             String input;
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             input = br.readLine();
+
             while(!quit) {
                 String command = input.split(" ")[0];
                 String[] parts;
@@ -130,6 +136,7 @@ public class Client {
                         if (parts.length != 3) {
                             System.out.println("Invalid syntax. Type \"help\" for help");
                         } else {
+                            // Send call message to our Node
                             Message msg = Message.createMsg(-1, nodeNum, MessageType.CLIENT_CALL, name, parts[1], parts[2]);
                             channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
                         }
@@ -143,7 +150,6 @@ public class Client {
                             int newX = Integer.parseInt(parts[1]);
                             int newY = Integer.parseInt(parts[2]);
                             changePos(newX, newY);
-                            System.out.println("finished doing changePos");
                         }
                         break;
 
@@ -163,18 +169,16 @@ public class Client {
                         System.out.println("Use as\n" +
                                 "\tquit\n" +
                                 "\thelp\n" +
-                                "\tcall <receiver> <message>" +
+                                "\tcall <receiver> <message>\n" +
                                 "\tchangePos <newX> <newY>\n");
                 }
                 if (!quit) {
                     input = br.readLine();
                 }
-
             }
         } catch (IOException | TimeoutException e) {
             e.printStackTrace();
         }
-
     }
 
     private static void handleLogin(String message) {
@@ -182,7 +186,6 @@ public class Client {
             case CLIENT_LOGIN_POS:
                 System.out.println("Successfully logged in as " + name + "!");
                 loggedIn = true;
-                System.out.println("Set loggedIn");
                 break;
 
             case CLIENT_LOGIN_NEG:
@@ -210,11 +213,12 @@ public class Client {
     }
 
     private static void disconnect() {
-        //tell our node we no longer need this name
         System.out.println("sending disconnect msg");
         Message msg = new Message(-1, nodeNum, MessageType.DISCONNECT, name);
         try {
+            //tell our node we no longer need this name
             channel.basicPublish("", queueName, props, SerializationUtils.serialize(msg));
+            //cancel consumer, and stop channel and connection
             channel.basicCancel(consumerTag);
             channel.close();
             connection.close();
@@ -226,6 +230,7 @@ public class Client {
     }
 
     private static int posToNodeId(int x, int y) throws InvalidCoordinatesException {
+        //convert from "world coordinates" to the node which handles that zone
         if (x < 0 || x > WORLD_WIDTH - 1 || y < 0 || y > WORLD_HEIGTH - 1) {
             throw new InvalidCoordinatesException("Coordinates out of range. Valid ranges are: \n" +
                     "\tx: [0, " + (WORLD_WIDTH - 1) + "]\n" +
@@ -238,7 +243,7 @@ public class Client {
     }
 
     private static void changePos(int x, int y) {
-
+        // Handle a Moving client
         int newNodeNum;
         try {
             newNodeNum = posToNodeId(x, y);
@@ -246,6 +251,7 @@ public class Client {
             System.out.println(e.getMessage());
             return;
         }
+        //check if they should be transferred to a different node given new World position
         if (newNodeNum != nodeNum) {
             //we need to request a transfer from our original node to the new node
             System.out.println(name + "Requesting transfer from " + nodeNum + " to " + newNodeNum);

@@ -13,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 
+//TODO quitting doesn't quite work!!!!   quit from original nod OK, quit after changePos NOT OK!!!
+// need to properly understand when to close connection / channel...
 //TODO clean debug prints
 //TODO add comments
 //TODO write explanation file
@@ -56,21 +58,15 @@ public class Node implements  Runnable {
             myChannel = connection.createChannel();
             myChannel.queueDeclare(inQueue, false, false, false, null);
         } catch (IOException | TimeoutException e) {
-            System.out.println("Node setup failed due to network reasons. We are not prepared for this. Burn.");
+            System.out.println("Node setup failed due to network reasons. We are not prepared for this.");
             e.printStackTrace();
-            // Isn't it convenient that everything is running in the same thread? Yep. It is. :D
             System.exit(1);
         }
-
-        //System.out.println("I'm node " + id);
-        //System.out.println("My neighbours are:");
 
         // Create outgoing channels to neighbour nodes
         for (NeighbourInfo_itf n : neighbours) {
             factory = new ConnectionFactory();
             factory.setHost(n.getHostName());
-
-            //System.out.println("\t" + n.getNodeId());
 
             try {
                 connection = factory.newConnection();
@@ -81,7 +77,6 @@ public class Node implements  Runnable {
                 e.printStackTrace();
             }
         }
-        //System.out.println();
 
         //add ourself to list of neighbours
         NeighbourInfo_itf myInfo = new NeighbourInfo(id, inQueue, "localhost");
